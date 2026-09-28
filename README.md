@@ -74,6 +74,7 @@ npm run dev
 | `npm run user:delete -- <email> --yes` | ลบผู้ใช้ถาวร (session/account ถูก cascade) |
 | `npm run uat:production` | acceptance gate สำหรับ host ที่ deploy แล้ว (HTTP only, ไม่แตะ DB) |
 | `npm run lint:deploy` | `bash -n` + ShellCheck ของ `deploy/*.sh` และทุก `run:` block ใน workflows |
+| `npm run dump:portable -- <dump.sql.gz> <out.sql.gz>` | เปลี่ยน case ชื่อตารางใน dump ที่ถ่ายบน Windows ให้ restore บน Linux (`lower_case_table_names=0`) ได้ |
 
 ## กู้คืนการเข้าสู่ระบบ (ops)
 

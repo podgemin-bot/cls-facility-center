@@ -48,6 +48,38 @@ sudo sed -i "s|^BETTER_AUTH_URL=.*|BETTER_AUTH_URL=\"https://cls.example.org\"|"
 sudo systemctl restart cls-facility
 ```
 
+## 2b. Load the seed data (one time)
+
+The prepared production snapshot lives on the dev machine at
+`C:\Users\PC\AppData\Local\Temp\opencode\cls-data-prep\`:
+
+| File | What it is |
+| ---- | ---------- |
+| `cls-ubuntu-20260928-140716.sql.gz` | MariaDB dump, table-name case rewritten for Linux |
+| `cls-data-20260928.tar.gz` | `.data/` (137 room photos + 7 floor plans) |
+| `SHA256SUMS.txt` | checksums for both |
+
+**Why not the raw dev dump:** Windows MariaDB stores table names lowercase, so a
+Windows dump says `` CREATE TABLE `roomsecurity` ``. The VM runs
+`lower_case_table_names = 0`, where `roomsecurity` and `RoomSecurity` are
+different identifiers — Prisma generates the exact case from the schema, so a
+direct import would produce a database the app cannot read. `portable-dump`
+(`npm run dump:portable -- in.sql.gz out.sql.gz`) re-cases only the table names
+in statement positions to match `prisma/migrations`; column names are
+case-insensitive in MariaDB and values are untouched.
+
+```bash
+# verify what you downloaded before trusting it
+sha256sum -c SHA256SUMS.txt
+sudo /opt/cls-facility/bin/restore.sh --file cls-ubuntu-20260928-140716.sql.gz --verify-only   # dry run
+sudo /opt/cls-facility/bin/restore.sh --file cls-ubuntu-20260928-140716.sql.gz --yes           # real load
+sudo rsync -a --chown=cls:cls ./cls-data-20260928.tar.gz /srv/cls-data/
+sudo tar -xzf /srv/cls-data/cls-data-20260928.tar.gz -C /srv/cls-data && rm /srv/cls-data/cls-data-20260928.tar.gz
+```
+
+Then confirm the three accounts (`admin@cls.local` / `editor@cls.local` /
+`viewer@cls.local`) sign in at the first UAT run.
+
 ## 3. Automated deploys
 
 `.github/workflows/deploy.yml` runs after a green `CI` run on `main` (or manually

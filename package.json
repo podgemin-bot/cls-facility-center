@@ -18,6 +18,7 @@
     "user:delete": "tsx scripts/delete-user.ts",
     "uat:production": "tsx scripts/production-uat.ts",
     "lint:deploy": "node scripts/lint-deploy-scripts.mjs",
+    "dump:portable": "node scripts/portable-dump.mjs",
     "lint": "eslint",
     "test": "vitest run"
   },
