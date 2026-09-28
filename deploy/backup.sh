@@ -43,6 +43,9 @@ DUMP_BIN="$(command -v mariadb-dump || command -v mysqldump || true)"
 MYSQL_DEFAULTS="$(mktemp)"
 trap 'rm -f "$MYSQL_DEFAULTS"' EXIT
 chmod 600 "$MYSQL_DEFAULTS"
+# The template literals are JavaScript, not shell: they must stay inside single
+# quotes so the shell does not expand ${url.hostname}.
+# shellcheck disable=SC2016
 node -e '
 const fs = require("node:fs");
 const url = new URL(process.argv[1]);

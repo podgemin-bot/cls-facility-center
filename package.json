@@ -17,6 +17,7 @@
     "user:reset": "tsx scripts/reset-password.ts",
     "user:delete": "tsx scripts/delete-user.ts",
     "uat:production": "tsx scripts/production-uat.ts",
+    "lint:deploy": "node scripts/lint-deploy-scripts.mjs",
     "lint": "eslint",
     "test": "vitest run"
   },

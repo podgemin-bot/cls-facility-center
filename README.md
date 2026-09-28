@@ -73,6 +73,7 @@ npm run dev
 | `npm run user:reset -- <email>` | รีเซ็ตรหัสผ่านจาก DB โดยตรง (ดูหมายเหตุด้านล่าง) |
 | `npm run user:delete -- <email> --yes` | ลบผู้ใช้ถาวร (session/account ถูก cascade) |
 | `npm run uat:production` | acceptance gate สำหรับ host ที่ deploy แล้ว (HTTP only, ไม่แตะ DB) |
+| `npm run lint:deploy` | `bash -n` + ShellCheck ของ `deploy/*.sh` และทุก `run:` block ใน workflows |
 
 ## กู้คืนการเข้าสู่ระบบ (ops)
 

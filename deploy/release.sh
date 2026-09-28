@@ -55,7 +55,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ ${EUID} -eq 0 ]] || die "run as root: $APP_ROOT/bin/release.sh"
-[[ "$KEEP" =~ ^[0-9]+$ ]] && (( KEEP >= 2 )) || die "--keep must be a number >= 2"
+if ! [[ "$KEEP" =~ ^[0-9]+$ ]] || (( KEEP < 2 )); then
+  die "--keep must be a number >= 2"
+fi
 [[ -s "$ENV_FILE" ]] || die "$ENV_FILE is missing — run deploy/bootstrap-ubuntu.sh first"
 [[ -d "$REPO_DIR/.git" ]] || die "$REPO_DIR is not a git repo"
 command -v flock >/dev/null || die "flock is required (apt-get install util-linux)"
@@ -89,6 +91,9 @@ if (( NODE_SCALED < 2212 )); then die "node >= 22.12 required, found $("$NODE_BI
 MYSQL_DEFAULTS="$(mktemp)"
 trap 'rm -f "$MYSQL_DEFAULTS"' EXIT
 chmod 600 "$MYSQL_DEFAULTS"
+# The template literals are JavaScript, not shell: they must stay inside single
+# quotes so the shell does not expand ${url.hostname}.
+# shellcheck disable=SC2016
 "$NODE_BIN" -e '
 const fs = require("node:fs");
 const url = new URL(process.argv[1]);
@@ -215,10 +220,13 @@ log "live: $SHA"
 
 log "pruning old releases (keeping $KEEP)"
 if (( KEEP < 100 )); then
+  # find instead of `ls -1dt` so a release directory name containing a space
+  # cannot be split, and so the sort key is the timestamp rather than the name.
   while read -r old; do
     if [[ "$old" == "$RELEASE_DIR/" ]]; then continue; fi
     if [[ "$old" == "${CURRENT_TARGET:-/nonexistent}/" ]]; then continue; fi
     rm -rf "$old" && echo "removed $old"
-  done < <(ls -1dt "$RELEASES_DIR"/*/ 2>/dev/null | tail -n "+$(( KEEP + 1 ))")
+  done < <(find "$RELEASES_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p/\n' 2>/dev/null \
+    | sort -rn | tail -n "+$(( KEEP + 1 ))" | cut -d' ' -f2-)
 fi
 df -h "$APP_ROOT" | tail -1

@@ -59,7 +59,11 @@ set +a
 : "${VERIFY_ADMIN_DATABASE_URL:?VERIFY_ADMIN_DATABASE_URL missing from $VERIFY_ENV_FILE}"
 
 if (( USE_LATEST )); then
-  DUMP_FILE="$(ls -1t "$BACKUP_ROOT"/db-*.sql.gz 2>/dev/null | head -1 || true)"
+  # Newest by mtime. find rather than `ls -1t` so a name with a space or a
+  # newline cannot be split into the wrong path — this picks the file that gets
+  # restored over the live database.
+  DUMP_FILE="$(find "$BACKUP_ROOT" -maxdepth 1 -type f -name 'db-*.sql.gz' -printf '%T@ %p\n' 2>/dev/null \
+    | sort -rn | head -1 | cut -d' ' -f2- || true)"
   [[ -n "$DUMP_FILE" ]] || die "no db-*.sql.gz found in $BACKUP_ROOT"
 fi
 [[ -n "$DUMP_FILE" ]] || { usage >&2; die "pass --latest or --file"; }
@@ -70,6 +74,9 @@ gzip -t "$DUMP_FILE" || die "gzip integrity check failed"
 MYSQL_DEFAULTS="$(mktemp)"
 trap 'rm -f "$MYSQL_DEFAULTS"' EXIT
 chmod 600 "$MYSQL_DEFAULTS"
+# The template literals are JavaScript, not shell: they must stay inside single
+# quotes so the shell does not expand ${url.hostname}.
+# shellcheck disable=SC2016
 node -e '
 const fs = require("node:fs");
 const url = new URL(process.argv[1]);

@@ -26,6 +26,7 @@ warn() { printf '\033[1;33m[warn]\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31m[fail]\033[0m %s\n' "$*" >&2; exit 1; }
 
 [[ ${EUID} -eq 0 ]] || die "run as root: sudo -E bash deploy/bootstrap-ubuntu.sh CLS_HOST=... ACME_EMAIL=..."
+# shellcheck source=/dev/null
 . /etc/os-release
 [[ ${ID:-} == ubuntu ]] || warn "expected Ubuntu, found ${ID:-unknown}"
 case "$(uname -m)" in

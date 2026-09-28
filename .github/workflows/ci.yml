@@ -56,6 +56,15 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # The VM shell never runs in CI otherwise. bash -n catches syntax
+      # mistakes and ShellCheck catches the quoting ones, for both deploy/*.sh
+      # and every run: block embedded in the workflows.
+      - name: Shellcheck the deploy scripts
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          node scripts/lint-deploy-scripts.mjs
+
       - name: Typecheck
         run: npx tsc --noEmit
 
