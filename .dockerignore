@@ -1,0 +1,11 @@
+node_modules
+.next
+public/storage
+.data
+Dockerfile
+*.log
+.env
+.env.production
+.devcontainer
+.vscode
+.git
