@@ -53,6 +53,34 @@ jobs:
       - name: Apply migrations
         run: npm run db:deploy
 
+      # The VM runs MariaDB with lower_case_table_names = 0 (case-sensitive).
+      # This job replays every migration twice on a throwaway database on Linux
+      # and asserts the exact-case tables Prisma expects exist. Windows can never
+      # run this — the local server folds names — so it has to live here.
+      - name: Verify fresh migrations on Linux (exact case)
+        env:
+          DATABASE_URL: "mysql://root:ci-root-password@127.0.0.1:3306/cls_facility?connectionLimit=2&acquireTimeout=30000"
+        run: npm run db:verify-fresh
+
+      # Windows dumps store table names lowercase; the VM (lctn=0) cannot read
+      # them. portable-dump must re-case CREATE TABLE / INSERT INTO etc to the
+      # exact names the migrations create. This is the same check the operator
+      # runs before shipping a new Windows-made dump.
+      - name: Portable dump rewrites table-name case for Linux
+        run: |
+          set -euo pipefail
+          # Windows dumps name tables in lowercase (server lower_case_table_names=1);
+          # the VM stores them exact-case, so dump table names must match the
+          # migrations. The fixture ships as base64 so this step contains no
+          # backticks inside single quotes.
+          printf '%s' 'Q1JFQVRFIFRBQkxFIGByb29tc2VjdXJpdHlgICgNCiAgYGlkYCBpbnQgTk9UIE5VTEwNCik7DQpJTlNFUlQgSU5UTyBgcm9vbXNlY3VyaXR5YCBWQUxVRVMgKDEpOw0K' | base64 -d > /tmp/win-dump.sql
+          gzip -f /tmp/win-dump.sql
+          node scripts/portable-dump.mjs /tmp/win-dump.sql.gz /tmp/linux-dump.sql.gz
+          gunzip -f /tmp/linux-dump.sql.gz
+          grep -q 'RoomSecurity' /tmp/linux-dump.sql
+          if grep -q 'roomsecurity' /tmp/linux-dump.sql; then echo "lowercase table name leaked" >&2; exit 1; fi
+          echo "portable dump case rewrite ok"
+
       - name: Lint
         run: npm run lint
 
