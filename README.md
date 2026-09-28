@@ -71,6 +71,7 @@ npm run dev
 | `npm run db:push` | sync schema โดยตรง `prisma db push` (dev) |
 | `npm run user:list` | ดูรายชื่อผู้ใช้ + role (ไม่แสดงรหัสผ่าน) |
 | `npm run user:reset -- <email>` | รีเซ็ตรหัสผ่านจาก DB โดยตรง (ดูหมายเหตุด้านล่าง) |
+| `npm run user:delete -- <email> --yes` | ลบผู้ใช้ถาวร (session/account ถูก cascade) |
 
 ## กู้คืนการเข้าสู่ระบบ (ops)
 
@@ -91,6 +92,13 @@ NEW_PASSWORD='...' npm run user:reset -- admin@example.com
 ```
 
 หมายเหตุ: รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร, ไม่รับรหัสผ่านผ่าน argv, และไม่ log รหัสผ่านหรือ hash ออกทาง stdout
+
+`user:delete` ใช้เมื่อเก็บบัญชี UAT หรือบัญชีที่สร้างผิดก่อน go-live — ไม่มี soft delete ในระบบ การลบจะหายถาวรและ `session`/`account` ของผู้ใช้นั้นถูกลบตาม cascade สคริปต์จะพิมพ์ role, จำนวน account/session, `created_at` ก่อนลบ และปฏิเสธการลบเมื่อไม่มี `--yes` หรือเมื่อผู้ใช้นั้นเป็น ADMIN คนสุดท้าย
+
+```bash
+npm run user:list                                    # ตรวจก่อนว่าจะลบใคร
+npm run user:delete -- test-admin@example.com --yes
+```
 
 ## Role / สิทธิ์
 

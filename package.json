@@ -15,6 +15,7 @@
     "storage:migrate": "tsx scripts/migrate-private-storage.ts --apply",
     "user:list": "tsx scripts/list-users.ts",
     "user:reset": "tsx scripts/reset-password.ts",
+    "user:delete": "tsx scripts/delete-user.ts",
     "lint": "eslint",
     "test": "vitest run"
   },

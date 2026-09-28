@@ -53,14 +53,17 @@ npm.cmd run user:reset -- <email>  # รีเซ็ตรหัสผ่าน�
 - Log: `dev.log` / `dev.err.log` ที่ app root
 - เริ่มใหม่: `npm.cmd run dev` (ถ้าพอร์ต 3000 ยังถูกจอง ให้ kill process ที่ค้างก่อน แล้วลบ `.dev-server.pid`)
 
-### บัญชีทดสอบบน dev DB (ยืนยันว่า login ได้จริงทั้งหมด)
+### บัญชีทดสอบบน dev DB
 | Email | Password | Role |
 |---|---|---|
-| `admin@cls.local` | `AdminPass123!` | ADMIN |
-| `editor@cls.local` | `EditorPass123!` | EDITOR |
-| `viewer@cls.local` | `ViewerPass123!` | VIEWER |
+| `admin@cls.local` | ดูไฟล์รหัสผ่าน (ด้านล่าง) | ADMIN |
+| `editor@cls.local` | ดูไฟล์รหัสผ่าน (ด้านล่าง) | EDITOR |
+| `viewer@cls.local` | ดูไฟล์รหัสผ่าน (ด้านล่าง) | VIEWER |
 
-รหัสผ่านเป็นแบบ `Name+Pass123!` ที่คาดเดาง่าย — **ต้องเปลี่ยนทั้งหมดก่อนขึ้น production** และล้างบัญชี test/UAT (`test-admin@example.com`, `test-admin2@example.com`, `test-admin3@example.com`)
+- **2026-09-28: เปลี่ยนรหัสผ่านทั้ง 3 บัญชีแล้ว** เป็นค่าสุ่มยาว 24 ตัว (ไม่ใช่ `Name+Pass123!` แบบเดิม) เก็บเป็น plaintext ที่ `C:\Users\PC\AppData\Local\Temp\opencode\cls-prod-passwords.txt` — **อยู่นอก repo, ลบทันทีหลังย้ายเข้า password manager** และอย่า commit ไฟล์นี้เด็ดขาด
+- ตรวจแล้วว่า login ด้วยรหัสใหม่ได้ HTTP 200 ทั้ง 3 บัญชี และรหัสเดิมได้ 401
+- ลบบัญชี test/UAT แล้ว: `test-admin@example.com`, `test-admin2@example.com`, `test-admin3@example.com` (ทั้งหมดไม่มี account/session ค้าง, ADMIN เหลือ 1 คน) ใช้ `npm run user:delete -- <email> --yes`
+- บัญชีที่เหลือบน dev DB มี 3 บัญชี พอดีกับ production
 
 ## Auth & Protected routes
 - **Security boundary จริง:** `src/lib/auth-session.ts` → `getCurrentSession()` (React `cache`) และ `requireSession()` ที่ validate ผ่าน `auth.api.getSession()` แล้ว `redirect("/login")`
@@ -182,6 +185,8 @@ Tests ระดับ integration ใช้ DB จริง (mock auth ผ่า
 9. **Ops scripts:** เพิ่ม `list-users.ts` + `reset-password.ts` เข้า repo พร้อม `user:list`/`user:reset`; harden `reset-password.ts` ให้รับรหัสผ่านจาก stdin (ไม่ตกใน shell history), ไม่รับผ่าน argv, ไม่ log รหัสผ่าน/hash และเตือนว่า bypass audit trail — ทดสอบ round-trip กับ `viewer@cls.local` (reset → login 200 → restore → login 200, รหัสผ่านเดิมยังใช้ได้)
 10. **Deployment artifacts:** เพิ่ม `deploy/` (bootstrap, release, backup, restore, systemd unit, Caddyfile) + `.github/workflows/{ci,deploy}.yml` + runbook `deploy/README.md` — ตรวจแล้วด้วย `bash -n`, ทดสอบ logic ของ env-guard และ node snippets แยก, YAML parse ผ่าน แต่ **ยังไม่ได้รันบน Linux/ARM64 จริง**
     - `SystemCallFilter` ตั้งใจ **ไม่ใส่** ใน systemd unit (กรอง syscall แบบ blind มีโอกาสพัง Next/V8) — hardening ที่ใช้คือ `ProtectSystem=strict` + `ProtectHome`/`PrivateTmp`/`PrivateDevices`/`NoNewPrivileges`/`RestrictNamespaces`/`RestrictAddressFamilies`
+11. **Production data:** เปลี่ยนรหัสผ่าน 3 บัญชี dev เป็นค่าสุ่ม 24 ตัว (ไม่ log/argv, revoke session เดิม, ยืนยันว่ารหัสเดิม 401), ลบ `test-admin*` 3 บัญชี, รีเซ็ต `CodeSequence CUST` 172 → 5, ถ่าย `mariadb-dump --single-transaction` + ทดสอบ restore เข้า scratch DB, audit `.data/` (144 ไฟล์/47,129,538 bytes, ไม่มี orphan/zero-byte/tmp/symlink)
+12. **`user:delete`:** เพิ่ม `scripts/delete-user.ts` + `user:delete -- <email> --yes` สำหรับเก็บบัญชี UAT — พิมพ์ role/account/session/created_at ก่อนลบ, cascade ลบ session+account, ปฏิเสธเมื่อไม่มี `--yes` หรือเป็น ADMIN คนสุดท้าย
 
 ## งานค้าง / ความเสี่ยงที่เหลือ
 - **ยังไม่ได้ทดสอบบน Linux ARM64 จริง** — `db:verify-fresh` ผ่านบน Windows local MariaDB ที่ `lower_case_table_names=1` เท่านั้น (สคริปต์จะบังคับตรวจ exact-case เมื่อค่าเป็น 0) ต้องรันซ้ำบน Ubuntu ARM64 ก่อน deploy; สคริปต์ใน `deploy/` ผ่านแค่ `bash -n` — คาดว่าจะเจอ path issue (systemd/uw/mariadb/oci) ตอนรันจริง
@@ -191,10 +196,10 @@ Tests ระดับ integration ใช้ DB จริง (mock auth ผ่า
 - **`npm audit` เหลือ 7 รายการ (1 moderate, 6 high)** จาก Prisma/MariaDB/MySQL2/xlsx ที่ยังไม่มี compatible fix — ต้องตัดสินใจว่าจะยอมรับหรือลด dependency
 - **Working copy ยังมีงาน uncommitted ทั้งหมด** และยังชี้ `origin` ไปที่ `cls-database` — ต้องระวังไม่ push ผิกที่ (เนื้อหา tracked ของ working copy ตรงกับ clean repo ทุกไฟล์ ยกเว้นไฟล์ที่ gitignore เช่น `.env`, `.data/`, logs)
 - **`reset-password.ts` เป็น ops tool ที่เขียนรหัสผ่านลง DB ได้โดยไม่มี session** — คนที่รันได้เท่ากับ bypass หน้า `/admin` ทั้งหมด จำกัดสิทธิ์ผู้ใช้ที่รัน shell บน VM, อย่าใส่รหัสผ่านใน argv, ล้างไฟล์/ตัวแปรรหัสผ่านหลังใช้ (รองรับ stdin แล้ว)
-- **Production data ยังไม่ได้เตรียม:** เปลี่ยนรหัสผ่านทั้ง 3 บัญชี dev, ล้าง test/UAT accounts (`test-admin*`), ตรวจ `CodeSequence`, dump MariaDB แบบ transaction, สร้าง `BETTER_AUTH_SECRET` ใหม่
+- **Production data เตรียมแล้ว (2026-09-28)** ยกเว้น 2 อย่างที่ต้องทำบน VM: เปลี่ยนรหัสผ่านทั้ง 3 บัญชี (สุ่มใหม่ 24 ตัว, ทดสอบ login 200/401 ผ่าน), ลบ `test-admin*` ทั้ง 3 บัญชี, รีเซ็ต `CodeSequence CUST` จาก 172 → 5, `mariadb-dump --single-transaction` + ทดสอบ restore เข้า scratch DB สำเร็จ — ที่เหลือคือ copy `.data/` ไป `/srv/cls-data` และ `BETTER_AUTH_SECRET` ใหม่ซึ่ง `bootstrap-ubuntu.sh` สร้างให้เองบน VM
 - **ยังไม่ได้ provision Oracle VM** และยังไม่มี GitHub Actions workflow
 - **การรั่วไหลในอดีตย้อนกลับไม่ได้** — ถือว่าข้อมูล/รูปที่เคยอยู่ใน public repo อาจถูกเข้าถึงแล้ว ควรพิจารณาหมุนข้อมูลที่เป็นความลับ
-- **ไฟล์รหัสผ่านชั่วคราว** `C:\Users\PC\AppData\Local\Temp\opencode\cls-admin-pw.txt` (plaintext) — ลบได้แล้ว ไม่ใช้อีก
+- **ไฟล์รหัสผ่านชั่วคราว** `C:\Users\PC\AppData\Local\Temp\opencode\cls-admin-pw.txt` (plaintext) — ลบได้แล้ว ไม่ใช้อีก; ไฟล์รหัสผ่านรุ่นใหม่คือ `C:\Users\PC\AppData\Local\Temp\opencode\cls-prod-passwords.txt` (plaintext, 3 บัญชี) — **ต้องลบหลังย้ายเข้า password manager**
 
 ## โน้ตที่ยังใช้ได้
 - **Prisma 7 CLI:** `migrate deploy` ต้องมี `prisma.config.ts` (datasource url) — `schema.prisma` อย่างเดียวไม่พอ; `migrate diff --from-migrations` ต้องมี `shadowDatabaseUrl` (flags เก่า `--to-schema-datamodel`/`--shadow-database-url` ถูกลบแล้ว) — ใช้ `--from-config-datasource --to-schema ...` ตรวจ drift แทน
@@ -206,7 +211,7 @@ Tests ระดับ integration ใช้ DB จริง (mock auth ผ่า
 - **`[System.Web.Security.Membership]` ใช้ไม่ได้** ใน PowerShell 5.1 (ไม่ได้ load assembly) — สร้างรหัสผ่านสุ่มด้วย `node -e "...crypto.randomInt..."` แทน
 - **Env var ไม่ทำงานข้าม bash tool call** (แต่ละ call เป็น process ใหม่) — ต้อง generate + ใช้รหัสผ่านในคำสั่งเดียวกัน
 - `AGENTS.md`: Next.js เวอร์ชันนี้มี breaking changes — อ่าน `node_modules/next/dist/docs/` ก่อนเขียนโค้ด
-- **counter `CUST` ใน dev DB มีช่องว่าง (~40)** จาก concurrency test — รหัสลูกค้าใหม่จะโดดเช่น `CUST-04x`; รีเซ็ตได้ด้วย `UPDATE CodeSequence SET lastValue = 5 WHERE prefix = 'CUST'` (เฉพาะเมื่อยืนยันว่ารหัส 6-4x ไม่ได้ใช้จริง)
+- **counter `CUST` เคยมีช่องว่างถึง 172 ทั้งที่มีลูกค้าแค่ 5 ราย** (จาก concurrency test) — รีเซ็ตเป็น 5 แล้ว 2026-09-28 หลังยืนยันว่ามีแค่ `CUST-001`..`CUST-005` รหัสถัดไปจึงเป็น `CUST-006`; **แต่ `npm test` รันบน dev DB เดียวกันและเผา counter อีก (5 → 13)** เพราะ test สร้าง/ลบลูกค้า และทิ้ง session ไว้ด้วย — ต้องรีเซ็ตหลังรันเทสต์ทุกครั้ง ถ้าจะถ่าย snapshot สำหรับ production; อย่าหวังว่า dump จะสะอาดถ้าเพิ่งรันเทสต์
 - **ห้ามรัน `scripts/import.ts` อัตโนมัติระหว่าง deploy** เพราะลบ facility records และไฟล์รูป — ใช้ dump/restore สำหรับ production
 - **`/etc/cls-facility/env` ต้องครอบทุกค่าด้วย `"`** เพราะ `DATABASE_URL` มี `&` — bash จะอ่านเป็น background operator (ทั้ง `set -a; . env; set +a` และ systemd `EnvironmentFile` ต้องการ quotes); `release.sh` มี guard `grep -nE '^[A-Za-z_][A-Za-z0-9_]*=[^"'\'']*&'` แล้วหยุดทันทีถ้าไม่มี quotes
 - **บน VM ห้ามใช้ `npm prune --omit=dev`** — `release.sh` เก็บ devDependencies ไว้เพราะ `tsx` (ops scripts) และ `prisma` CLI อยู่ในนั้น; จัดการพื้นที่ด้วย `--keep N` แทน
@@ -216,7 +221,7 @@ Tests ระดับ integration ใช้ DB จริง (mock auth ผ่า
 1. ~~ตัดสินใจเรื่อง scripts~~ **เสร็จแล้ว (2026-09-28):** `list-users.ts` + `reset-password.ts` เข้า repo พร้อม `user:list`/`user:reset` (harden stdin) — ข้อถัดไปคือข้อ 2
 2. Provision Oracle Always Free ARM64 VM: เลือก home region ใกล้ไทยที่มี A1 capacity, Ubuntu + SSH key + persistent volume, firewall เปิดเฉพาะ 22/80/443 แล้วรัน `deploy/bootstrap-ubuntu.sh` (ทำแทนข้อ 3, 5, 6 ที่ยังไม่มี VM) — **ยังต้องเปิดบัญชี OCI เอง**
 3. บน VM: `release.sh --full --verify-fresh` (ครอบคลุม `npm ci` → prisma generate → lint → tsc → test → build → **db:verify-fresh** บน Linux case-sensitive) — ต้องผ่านก่อน go-live
-4. เตรียม production data: เปลี่ยนรหัสผ่านทั้ง 3 บัญชี dev, ล้าง `test-admin*` accounts, ตรวจ `CodeSequence`, `mysqldump` แบบ transaction, copy private storage ไป `/srv/cls-data`, สร้าง `BETTER_AUTH_SECRET` ใหม่
+4. ~~เตรียม production data~~ **เสร็จแล้ว (2026-09-28):** เปลี่ยนรหัสผ่าน 3 บัญชี (สุ่มใหม่, login 200/401 ยืนยันแล้ว), ลบ `test-admin*` ทั้ง 3, `CodeSequence CUST` 172 → 5, ล้าง session ที่ test suite ทิ้งไว้, `mariadb-dump --single-transaction` ที่ `C:\Users\PC\AppData\Local\Temp\opencode\cls-data-prep\cls-dev-20260928-140716.sql(.gz)` และพิสูจน์ว่า restore เข้า scratch DB ได้ (15 tables, 3 users, 62 rooms, 5 customers) — **เหลือทำบน VM:** copy `.data/` (144 ไฟล์, 47,129,538 bytes) ไป `/srv/cls-data` และยืนยันว่า `BETTER_AUTH_SECRET` ใหม่ถูกสร้าง
 5. ~~Deploy แบบ release directory~~ **เตรียมไว้แล้ว:** `deploy/release.sh` (build → dump → migrate → สลับ symlink → health-check → rollback) — ต้องรันจริงบน VM อย่างน้อย 1 ครั้ง
 6. ~~ตั้ง GitHub Actions~~ **เตรียมไว้แล้ว:** `.github/workflows/ci.yml` + `deploy.yml` — ต้องใส่ secrets (`DEPLOY_HOST/USER/SSH_KEY/KNOWN_HOSTS`) และตั้ง dynamic group/policy ของ OCI ให้เสร็จก่อน
 7. ตั้ง URL/HTTPS: DuckDNS + Caddy, ตั้ง `BETTER_AUTH_URL=https://...`; เมื่อได้โดเมนองค์กรค่อยย้าย DNS ไป Cloudflare และบังคับ canonical host
