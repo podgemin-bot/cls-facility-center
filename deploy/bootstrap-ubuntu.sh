@@ -223,6 +223,26 @@ else
   warn "caddy not configured — edit /etc/caddy/Caddyfile (replace the host), then: systemctl reload caddy"
 fi
 
+# ------------------------------------------------------------------ oci cli
+# Optional but recommended: backup.sh uploads copies to OCI Object Storage only
+# when OCI_BUCKET is set, and without the cli the offsite half of the backup is
+# dead. Best-effort on purpose — backups still work locally without it and the
+# operator may be setting the bucket/policy up later.
+if command -v oci >/dev/null 2>&1; then
+  log "oci cli already installed ($(command -v oci))"
+elif command -v python3 >/dev/null 2>&1 && python3 -m pip --version >/dev/null 2>&1; then
+  log "installing the oci cli (best-effort)"
+  if python3 -m pip install --break-system-packages --quiet oci-cli; then
+    hash -r
+    command -v oci >/dev/null 2>&1 || die "pip installed the oci cli but it is not on PATH"
+    log "oci cli installed: $(command -v oci)"
+  else
+    warn "oci-cli install failed — rerun later: python3 -m pip install --break-system-packages oci-cli"
+  fi
+else
+  warn "python3/pip missing — install later: apt-get install -y python3-pip && python3 -m pip install --break-system-packages oci-cli"
+fi
+
 # ------------------------------------------------------------------ deploy tools
 log "installing deploy scripts and systemd units"
 for f in release.sh backup.sh restore.sh; do

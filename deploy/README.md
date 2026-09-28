@@ -61,6 +61,14 @@ via `workflow_dispatch`). It copies the deploy scripts over SSH and calls
 | `DEPLOY_SSH_KEY` | private key matching the authorized key on the VM |
 | `DEPLOY_KNOWN_HOSTS` | output of `ssh-keyscan -p 22 <host>` — never use strict-host-key-checking off |
 
+The workflow uses the same key two ways, so **one key pair covers both**: the
+private half becomes `DEPLOY_SSH_KEY`, and the **public half must be registered
+twice** — as the VM's `authorized_keys` entry (so GitHub can SSH in and run the
+deploy) *and* as a **read-only GitHub deploy key** on this repo (so
+`actions/checkout` and the VM's own `git fetch` can pull the private repo). The
+VM's clone was done by `bootstrap-ubuntu.sh` with its own generated
+`/root/.ssh/cls_deploy_key`, also read-only.
+
 Because GitHub does not set a user for `workflow_run`, prefer a dedicated deploy
 user whose `authorized_keys` entry restricts the command, or accept that the key
 can run any command the user can.
@@ -97,9 +105,20 @@ OCI_BUCKET=cls-backups
 OCI_AUTH=instance_principal
 ```
 
+Values are **unquoted, sh-style** — this file is also sourced by `backup.sh`
+when it runs by hand, and bash keeps the quotes where systemd strips them.
+
+**Install the oci cli** (bootstrap tries this for you and warns when it fails):
+
+```bash
+sudo apt-get install -y python3-pip
+sudo python3 -m pip install --break-system-packages oci-cli
+oci --version
+```
+
 The instance principal needs a dynamic group and a policy allowing
-`object-extensions`/`bucket-read` on that bucket, and the OCI CLI installed on the VM.
-Uploads go to `daily/` (7 newest kept) and to `weekly/` on Sundays (4 newest kept).
+`object-extensions`/`bucket-read` on that bucket. Uploads go to `daily/`
+(7 newest kept) and to `weekly/` on Sundays (4 newest kept).
 
 ```bash
 sudo systemctl start cls-backup.service     # run now, logs to journalctl -u cls-backup

@@ -37,6 +37,26 @@ set +a
 : "${DATABASE_URL:?DATABASE_URL missing from $ENV_FILE}"
 : "${PRIVATE_STORAGE_ROOT:?PRIVATE_STORAGE_ROOT missing from $ENV_FILE}"
 
+# The systemd timer feeds this file in as its EnvironmentFile; source it here
+# too so the exact same variables are visible to interactive runs. Accept both
+# the sh-style unquoted form and the quoted form systemd strips, then normalize.
+if [[ -s "$ENV_DIR/backup.env" ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  . "$ENV_DIR/backup.env"
+  set +a
+fi
+strip_quotes() { # remove one surrounding pair of double quotes, if both present
+  local value="$1"
+  if [[ "$value" == \"*\" ]]; then
+    value="${value#\"}"
+    value="${value%\"}"
+  fi
+  printf '%s' "$value"
+}
+OCI_BUCKET="$(strip_quotes "${OCI_BUCKET:-}")"
+OCI_AUTH="$(strip_quotes "${OCI_AUTH:-instance_principal}")"
+
 DUMP_BIN="$(command -v mariadb-dump || command -v mysqldump || true)"
 [[ -n "$DUMP_BIN" ]] || die "mariadb-dump/mysqldump not found (apt-get install mariadb-client)"
 
@@ -95,9 +115,9 @@ if [[ -z "${OCI_BUCKET:-}" ]]; then
   exit 0
 fi
 
-command -v oci >/dev/null || die "OCI_BUCKET is set but the oci CLI is missing"
+command -v oci >/dev/null || die "OCI_BUCKET is set but the oci cli is missing (see deploy/README.md, 'Install the oci cli' in section 5)"
 OCI_AUTH_ARGS=(--auth instance_principal)
-if [[ "${OCI_AUTH:-instance_principal}" != "instance_principal" ]]; then
+if [[ "$OCI_AUTH" != "instance_principal" ]]; then
   OCI_AUTH_ARGS=()
 fi
 namespace="$(oci os ns get "${OCI_AUTH_ARGS[@]}" | node -e '
