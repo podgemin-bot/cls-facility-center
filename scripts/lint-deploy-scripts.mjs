@@ -9,7 +9,7 @@
  * Skips ShellCheck with a warning when it is not installed, so this stays usable
  * on a machine without it. CI installs it and the step is then meaningful.
  */
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";

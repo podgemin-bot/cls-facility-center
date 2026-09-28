@@ -13,7 +13,7 @@ concurrency:
 jobs:
   verify:
     name: lint, typecheck, test, build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     # Integration tests talk to a real MariaDB and create their own temp users.
     services:
