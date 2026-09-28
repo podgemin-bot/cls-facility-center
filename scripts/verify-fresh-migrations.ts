@@ -2,10 +2,22 @@ import "dotenv/config";
 
 import { spawnSync } from "node:child_process";
 import path from "node:path";
+import { readdirSync, existsSync } from "node:fs";
 import mariadb from "mariadb";
 
 const databaseName = `cls_migrate_verify_${process.pid}`;
 const appRoot = path.resolve(import.meta.dirname, "..");
+
+// Derive the expected migration count from the tree instead of hardcoding it,
+// so adding a migration cannot silently fail the go-live gate. A migration
+// directory carries a migration.sql (0_init counts too).
+const migrationsDir = path.join(appRoot, "prisma", "migrations");
+const expectedMigrations = BigInt(
+  readdirSync(migrationsDir, { withFileTypes: true }).filter(
+    (dirent) =>
+      dirent.isDirectory() && existsSync(path.join(migrationsDir, dirent.name, "migration.sql"))
+  ).length
+);
 
 async function main() {
   const databaseUrl = process.env.DATABASE_URL;
@@ -57,14 +69,14 @@ async function main() {
     )) as { count: bigint }[];
 
     console.log(`lower_case_table_names=${lowerCaseRows[0]?.value}`);
-    console.log(`successful_migrations=${migrationRows[0]?.count}`);
+    console.log(`successful_migrations=${migrationRows[0]?.count} (expected ${expectedMigrations})`);
     console.log(`exact_RoomSecurity_tables=${tableRows[0]?.count}`);
     console.log(`compatible_RoomSecurity_tables=${compatibleTableRows[0]?.count}`);
     console.log(`legacy_security_columns=${legacyRows[0]?.count}`);
 
     const requiresExactCase = lowerCaseRows[0]?.value === 0;
     if (
-      migrationRows[0]?.count !== BigInt(5) ||
+      migrationRows[0]?.count !== expectedMigrations ||
       compatibleTableRows[0]?.count !== BigInt(1) ||
       (requiresExactCase && tableRows[0]?.count !== BigInt(1)) ||
       legacyRows[0]?.count !== BigInt(0)
