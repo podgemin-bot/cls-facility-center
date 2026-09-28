@@ -124,10 +124,26 @@ npm.cmd run user:reset -- <email>  # รีเซ็ตรหัสผ่าน�
 | `scripts/uat-card-layout.ts` | UAT card layout ผ่าน playwright-core + Chrome headless (ต้องรัน dev server ก่อน) |
 | `scripts/backfill-security-defaults.ts`, `scripts/normalize-security.ts`, `scripts/seed-customers.ts` | maintenance scripts (รันซ้ำส่วนใหญ่ปลอดภัย) |
 
+## Production deployment (deploy/)
+| ไฟล์ | หน้าที่ |
+|---|---|
+| `deploy/README.md` | runbook ฉบับเต็ม: provision → first deploy → CI/CD → day-to-day → backup/restore → go-live checklist |
+| `deploy/bootstrap-ubuntu.sh` | provision ครั้งแรก (idempotent): Node 22.12 tarball, MariaDB loopback-only, `cls` user, DB accounts, Caddy, ufw, systemd units, GitHub deploy key |
+| `deploy/release.sh` | deploy แบบ release directory — `npm ci` → prisma generate → (lint/tsc/test ถ้า `--full`) → build → (db:verify-fresh ถ้า `--verify-fresh`) → dump DB → `migrate deploy` → สลับ symlink → restart → health check → rollback อัตโนมัติเมื่อไม่ผ่าน |
+| `deploy/backup.sh` | `mysqldump --single-transaction` + tar รูป, เก็บ local 7 วัน, อัปโหลด OCI Object Storage แบบ instance principal (daily 7 / weekly 4) เมื่อตั้ง `OCI_BUCKET` ใน `/etc/cls-facility/backup.env` |
+| `deploy/restore.sh` | กู้คืน DB — default เป็น verify-only (กู้ลงฐานชั่วคราวแล้วลบ), ของจริงต้องใส่ `--yes` และ dump สถานะปัจจุบันก่อน |
+| `deploy/cls-facility.service` | systemd unit — `npm run start` ผูก `127.0.0.1:3000`, `ProtectSystem=strict`, `ReadWritePaths` เฉพาะ releases + `/srv/cls-data` |
+| `deploy/cls-backup.service`, `deploy/cls-backup.timer` | สำรองข้อมูลทุกวัน 02:30 UTC |
+| `deploy/Caddyfile` | reverse proxy + TLS + security headers (template แทน `__CLS_HOST__`) |
+| `.github/workflows/ci.yml` | push/PR → MariaDB service container → migrate → lint → tsc → test → build |
+| `.github/workflows/deploy.yml` | หลัง CI ผ่านบน main → scp สคริปต์ + SSH เรียก `release.sh --ref <sha>` (VM ดึง source และ build เอง) |
+
 > `list-users.ts` และ `reset-password.ts` **ย้ายเข้า clean repo แล้ว** (commit `ops: add user list/reset scripts`) พร้อม npm scripts `user:list` / `user:reset` — รายละเอียดการ harden ดูตารางด้านบน
 
 ## Testing
 `npm.cmd test` → **31 files / 289 tests** ผ่าน พร้อม `npx tsc --noEmit`, ESLint (0 error) และ `npm run build` (warning-free)
+
+CI: `.github/workflows/ci.yml` ยิง MariaDB 11.4 เป็น service container (integration tests ต้องใช้ DB จริง) แล้ว `migrate deploy` → lint → `tsc --noEmit` → test → build ทุก push/PR; `deploy.yml` จะ deploy ต่อเมื่อ CI ผ่านบน main (workflow_run) เท่านั้น
 
 Tests ระดับ integration ใช้ DB จริง (mock auth ผ่าน `vi.mock`; สร้าง temp user + cleanup เอง) — **ระวังว่าจะ mutate ข้อมูลใน DB จริง**
 - `src/proxy.test.ts` — proxy guard (มี both cookie names)
@@ -164,9 +180,14 @@ Tests ระดับ integration ใช้ DB จริง (mock auth ผ่า
 7. **Fix:** `scripts/verify-fresh-migrations.ts` ใช้ BigInt literals ซึ่งขัดกับ `target: ES2017` → เปลี่ยนเป็น `BigInt()` (typecheck เคย fail 4 errors)
 8. **Cleanup:** เก็บ trailing whitespace / blank line ท้ายไฟล์ 3 ไฟล์ให้ `git diff --check` สะอาด
 9. **Ops scripts:** เพิ่ม `list-users.ts` + `reset-password.ts` เข้า repo พร้อม `user:list`/`user:reset`; harden `reset-password.ts` ให้รับรหัสผ่านจาก stdin (ไม่ตกใน shell history), ไม่รับผ่าน argv, ไม่ log รหัสผ่าน/hash และเตือนว่า bypass audit trail — ทดสอบ round-trip กับ `viewer@cls.local` (reset → login 200 → restore → login 200, รหัสผ่านเดิมยังใช้ได้)
+10. **Deployment artifacts:** เพิ่ม `deploy/` (bootstrap, release, backup, restore, systemd unit, Caddyfile) + `.github/workflows/{ci,deploy}.yml` + runbook `deploy/README.md` — ตรวจแล้วด้วย `bash -n`, ทดสอบ logic ของ env-guard และ node snippets แยก, YAML parse ผ่าน แต่ **ยังไม่ได้รันบน Linux/ARM64 จริง**
+    - `SystemCallFilter` ตั้งใจ **ไม่ใส่** ใน systemd unit (กรอง syscall แบบ blind มีโอกาสพัง Next/V8) — hardening ที่ใช้คือ `ProtectSystem=strict` + `ProtectHome`/`PrivateTmp`/`PrivateDevices`/`NoNewPrivileges`/`RestrictNamespaces`/`RestrictAddressFamilies`
 
 ## งานค้าง / ความเสี่ยงที่เหลือ
-- **ยังไม่ได้ทดสอบบน Linux ARM64 จริง** — `db:verify-fresh` ผ่านบน Windows local MariaDB ที่ `lower_case_table_names=1` เท่านั้น (สคริปต์จะบังคับตรวจ exact-case เมื่อค่าเป็น 0) ต้องรันซ้ำบน Ubuntu ARM64 ก่อน deploy
+- **ยังไม่ได้ทดสอบบน Linux ARM64 จริง** — `db:verify-fresh` ผ่านบน Windows local MariaDB ที่ `lower_case_table_names=1` เท่านั้น (สคริปต์จะบังคับตรวจ exact-case เมื่อค่าเป็น 0) ต้องรันซ้ำบน Ubuntu ARM64 ก่อน deploy; สคริปต์ใน `deploy/` ผ่านแค่ `bash -n` — คาดว่าจะเจอ path issue (systemd/uw/mariadb/oci) ตอนรันจริง
+- **ยังไม่ได้ provision Oracle VM** — ต้องเปิดบัญชี OCI, สร้าง A1 shape, แล้วรัน `deploy/bootstrap-ubuntu.sh`; ต้องทำ dynamic group + policy สำหรับ instance principal (Object Storage) ก่อน backup จะอัปโหลด OCI ได้
+- **ยังไม่ได้ใส่ GitHub secrets** (`DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`) — `deploy.yml` จะ fail จนกว่าจะตั้ง และ `DEPLOY_USER` ต้องมี passwordless sudo
+- **`scripts/verify-fresh-migrations.ts` import `mariadb` ซึ่งไม่ได้ประกาศใน package.json** — ตอนนี้ได้จาก transitive dep ของ `@prisma/adapter-mariadb` (3.4.5) ที่ถูก hoist ขึ้น `node_modules` จึงยังทำงาน แต่ถ้า adapter เปลี่ยน major จะพัง — ควรเพิ่ม `mariadb` เป็น devDependency ตอนมีเวลาอัปเดต lock file
 - **`npm audit` เหลือ 7 รายการ (1 moderate, 6 high)** จาก Prisma/MariaDB/MySQL2/xlsx ที่ยังไม่มี compatible fix — ต้องตัดสินใจว่าจะยอมรับหรือลด dependency
 - **Working copy ยังมีงาน uncommitted ทั้งหมด** และยังชี้ `origin` ไปที่ `cls-database` — ต้องระวังไม่ push ผิกที่ (เนื้อหา tracked ของ working copy ตรงกับ clean repo ทุกไฟล์ ยกเว้นไฟล์ที่ gitignore เช่น `.env`, `.data/`, logs)
 - **`reset-password.ts` เป็น ops tool ที่เขียนรหัสผ่านลง DB ได้โดยไม่มี session** — คนที่รันได้เท่ากับ bypass หน้า `/admin` ทั้งหมด จำกัดสิทธิ์ผู้ใช้ที่รัน shell บน VM, อย่าใส่รหัสผ่านใน argv, ล้างไฟล์/ตัวแปรรหัสผ่านหลังใช้ (รองรับ stdin แล้ว)
@@ -187,14 +208,17 @@ Tests ระดับ integration ใช้ DB จริง (mock auth ผ่า
 - `AGENTS.md`: Next.js เวอร์ชันนี้มี breaking changes — อ่าน `node_modules/next/dist/docs/` ก่อนเขียนโค้ด
 - **counter `CUST` ใน dev DB มีช่องว่าง (~40)** จาก concurrency test — รหัสลูกค้าใหม่จะโดดเช่น `CUST-04x`; รีเซ็ตได้ด้วย `UPDATE CodeSequence SET lastValue = 5 WHERE prefix = 'CUST'` (เฉพาะเมื่อยืนยันว่ารหัส 6-4x ไม่ได้ใช้จริง)
 - **ห้ามรัน `scripts/import.ts` อัตโนมัติระหว่าง deploy** เพราะลบ facility records และไฟล์รูป — ใช้ dump/restore สำหรับ production
+- **`/etc/cls-facility/env` ต้องครอบทุกค่าด้วย `"`** เพราะ `DATABASE_URL` มี `&` — bash จะอ่านเป็น background operator (ทั้ง `set -a; . env; set +a` และ systemd `EnvironmentFile` ต้องการ quotes); `release.sh` มี guard `grep -nE '^[A-Za-z_][A-Za-z0-9_]*=[^"'\'']*&'` แล้วหยุดทันทีถ้าไม่มี quotes
+- **บน VM ห้ามใช้ `npm prune --omit=dev`** — `release.sh` เก็บ devDependencies ไว้เพราะ `tsx` (ops scripts) และ `prisma` CLI อยู่ในนั้น; จัดการพื้นที่ด้วย `--keep N` แทน
+- **Caddy ต้องส่งต่อ public host ใน `X-Forwarded-Host`** — Next.js เทียบ `Origin` กับ `X-Forwarded-Host` ใน Server Actions แล้ว reject เมื่อไม่ตรง ถ้าเปลี่ยน proxy ต้องใส่ `serverActions.allowedOrigins`
 
 ## งานที่จะทำต่อ
 1. ~~ตัดสินใจเรื่อง scripts~~ **เสร็จแล้ว (2026-09-28):** `list-users.ts` + `reset-password.ts` เข้า repo พร้อม `user:list`/`user:reset` (harden stdin) — ข้อถัดไปคือข้อ 2
-2. Provision Oracle Always Free ARM64 VM: เลือก home region ใกล้ไทยที่มี A1 capacity, Ubuntu + SSH key + persistent volume, firewall เปิดเฉพาะ 22/80/443, ติดตั้ง Node 22.12 / MariaDB / Caddy / systemd
-3. บน VM: `npm ci` → `npx prisma generate` → `npm run lint` → `npm test` → `npx tsc --noEmit` → `npm run build` → **`npm run db:verify-fresh`** (ต้องผ่านบน Linux case-sensitive)
+2. Provision Oracle Always Free ARM64 VM: เลือก home region ใกล้ไทยที่มี A1 capacity, Ubuntu + SSH key + persistent volume, firewall เปิดเฉพาะ 22/80/443 แล้วรัน `deploy/bootstrap-ubuntu.sh` (ทำแทนข้อ 3, 5, 6 ที่ยังไม่มี VM) — **ยังต้องเปิดบัญชี OCI เอง**
+3. บน VM: `release.sh --full --verify-fresh` (ครอบคลุม `npm ci` → prisma generate → lint → tsc → test → build → **db:verify-fresh** บน Linux case-sensitive) — ต้องผ่านก่อน go-live
 4. เตรียม production data: เปลี่ยนรหัสผ่านทั้ง 3 บัญชี dev, ล้าง `test-admin*` accounts, ตรวจ `CodeSequence`, `mysqldump` แบบ transaction, copy private storage ไป `/srv/cls-data`, สร้าง `BETTER_AUTH_SECRET` ใหม่
-5. Deploy แบบ release directory: build บน ARM64, `migrate deploy` ครั้งเดียวก่อนสลับ release, health-check `/login`, restart ผ่าน systemd, rollback ได้ (DB migration ต้อง backup ก่อน)
-6. ตั้ง GitHub Actions: test + typecheck + ESLint + build; เมื่อ main ผ่านจึง SSH ไปสั่ง deploy โดยไม่ส่ง Windows/x64 artifacts
+5. ~~Deploy แบบ release directory~~ **เตรียมไว้แล้ว:** `deploy/release.sh` (build → dump → migrate → สลับ symlink → health-check → rollback) — ต้องรันจริงบน VM อย่างน้อย 1 ครั้ง
+6. ~~ตั้ง GitHub Actions~~ **เตรียมไว้แล้ว:** `.github/workflows/ci.yml` + `deploy.yml` — ต้องใส่ secrets (`DEPLOY_HOST/USER/SSH_KEY/KNOWN_HOSTS`) และตั้ง dynamic group/policy ของ OCI ให้เสร็จก่อน
 7. ตั้ง URL/HTTPS: DuckDNS + Caddy, ตั้ง `BETTER_AUTH_URL=https://...`; เมื่อได้โดเมนองค์กรค่อยย้าย DNS ไป Cloudflare และบังคับ canonical host
-8. Backup/monitoring: dump DB + รูปรายวันไป private OCI Object Storage, retention 7 daily / 4 weekly, disk/service health alerts และทดสอบ restore จริง
-9. Production UAT ก่อน go-live: ทุก route/role/CRUD/floorplan/photo, forged-cookie + public-file denial, HTTPS cookie, reboot persistence, ไม่มี port 3306 เปิด, mobile 390px + desktop 1280px
+8. Backup/monitoring: `cls-backup.timer` + `backup.sh` (OCI instance principal, 7 daily / 4 weekly) เตรียมไว้แล้ว — ต้องสร้าง bucket + dynamic group/policy และพิสูจน์ด้วย `restore.sh --latest --verify-only` ก่อน go-live
+9. Production UAT ก่อน go-live: ทุก route/role/CRUD/floorplan/photo, forged-cookie + public-file denial, HTTPS cookie, reboot persistence, ไม่มี port 3306 เปิด, mobile 390px + desktop 1280px (รายการเตรียมไว้ใน `deploy/README.md`)

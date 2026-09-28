@@ -33,6 +33,7 @@ src/
 prisma/schema.prisma   # โมเดลข้อมูล
 prisma/migrations/     # Prisma migrations
 scripts/import.ts      # import จาก Excel master database (ครั้งเดียว)
+deploy/                # systemd unit, Caddyfile, bootstrap/release/backup/restore (ดู deploy/README.md)
 ```
 
 ## เริ่มต้นพัฒนา (Development)
@@ -105,22 +106,22 @@ NEW_PASSWORD='...' npm run user:reset -- admin@example.com
 
 Production ใช้ Ubuntu ARM64 VM, Node.js 22.12+, MariaDB ที่ bind เฉพาะ `127.0.0.1`, Caddy และ `systemd` โดย build บน VM โดยตรง ห้าม copy `.next` หรือ `node_modules` จาก Windows/x64
 
+ขั้นตอนทั้งหมด (provision, deploy, rollback, backup, restore, go-live checklist) อยู่ที่ **[`deploy/README.md`](deploy/README.md)** — สคริปต์และ systemd/Caddy config อยู่ใน `deploy/`
+
 ```bash
-nvm install 22.12.0
-nvm use 22.12.0
-npm ci
-npx prisma generate
-npm run lint
-npm test
-npx tsc --noEmit
-npm run build
-npm run db:deploy
-sudo systemctl restart cls-facility
-curl -fsS http://127.0.0.1:3000/login >/dev/null
+# 1. provision เครื่องครั้งแรก (Node, MariaDB, Caddy, ufw, systemd units, deploy key)
+sudo -E bash deploy/bootstrap-ubuntu.sh   # CLS_HOST=... ACME_EMAIL=...
+
+# 2. deploy ครั้งแรก — gate เต็มบน ARM64
+sudo /opt/cls-facility/bin/release.sh --full --verify-fresh
+
+# 3. deploy ปกติ
+sudo /opt/cls-facility/bin/release.sh --ref <sha> --yes
 ```
 
 หมายเหตุ:
 - `.env.example` เป็น template ตัวจริง — ห้ามใส่ secrets จริงในไฟล์ที่ commit ขึ้น repo
+- `/etc/cls-facility/env` ต้อง **ครอบทุกค่าด้วยเครื่องหมายคำพูด** เพราะ `DATABASE_URL` มี `&` ซึ่ง bash จะอ่านเป็น background operator (สคริปต์ deploy จะตรวจและหยุดทันทีถ้าไม่มีเครื่องหมายคำพูด)
 - ตั้ง `PRIVATE_STORAGE_ROOT=/srv/cls-data` บน persistent volume และห้ามวางใต้ `public/` หรือ release directory
 - รัน `npm run storage:migrate` ครั้งเดียวเมื่อต้องย้ายไฟล์จากระบบเดิม แล้วสำรอง `.data`/`/srv/cls-data` แยกจาก source code
 - `next.config.ts` ยังตั้ง `output: "standalone"` ไว้สำหรับ Docker fallback เท่านั้น; production รอบนี้ไม่ใช้ Docker

@@ -1,0 +1,68 @@
+name: Deploy
+
+# Only a green CI run on main may deploy. The VM pulls the source and builds it
+# itself on ARM64, so nothing platform-specific ever crosses the wire.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit sha or branch to deploy"
+        required: true
+        default: main
+      full:
+        description: "Also run lint, tests and typecheck on the VM"
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Release to the VM
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || inputs.ref }}
+          ssh-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Resolve the ref to deploy
+        id: ref
+        run: |
+          sha="$(git rev-parse "${{ inputs.ref || github.event.workflow_run.head_sha }}^{commit}")"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Deploying $sha"
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Upload deploy scripts
+        run: |
+          scp deploy/release.sh deploy/backup.sh deploy/restore.sh \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/tmp/"
+          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            "sudo install -m 0750 -o root -g root /tmp/release.sh /tmp/backup.sh /tmp/restore.sh /opt/cls-facility/bin/ && rm -f /tmp/release.sh /tmp/backup.sh /tmp/restore.sh"
+
+      - name: Deploy
+        run: |
+          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            "/opt/cls-facility/bin/release.sh --ref ${{ steps.ref.outputs.sha }} --yes ${{ inputs.full && '--full' || '' }}"
+
+      - name: Smoke check
+        run: |
+          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            "curl -fsS -o /dev/null --max-time 15 http://127.0.0.1:3000/login && systemctl is-active cls-facility && readlink -f /opt/cls-facility/current"

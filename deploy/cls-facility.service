@@ -1,0 +1,49 @@
+[Unit]
+Description=CLS Facility Center (Next.js)
+Documentation=https://github.com/podgemin-bot/cls-facility-center
+After=network-online.target mariadb.service
+Wants=network-online.target
+Requires=mariadb.service
+
+[Service]
+Type=simple
+User=cls
+Group=cls
+WorkingDirectory=/opt/cls-facility/current
+EnvironmentFile=/etc/cls-facility/env
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=NODE_OPTIONS=--max-old-space-size=1536
+ExecStart=/usr/local/bin/npm run start -- --hostname 127.0.0.1 --port 3000
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=180
+TimeoutStopSec=45
+KillSignal=SIGTERM
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cls-facility
+UMask=0077
+
+# Filesystem hardening: everything read-only except the release dir and photo storage.
+ProtectSystem=strict
+ReadWritePaths=/opt/cls-facility/releases /srv/cls-data /var/backups/cls
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+NoNewPrivileges=yes
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

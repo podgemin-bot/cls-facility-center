@@ -1,0 +1,7 @@
+# Linux is the production target, so the repository stores LF everywhere.
+# Without this, shell scripts, systemd units and Caddy configs break with
+# "bad interpreter: /usr/bin/env bash^M" after cloning on Ubuntu.
+* text=auto eol=lf
+
+# PowerShell is only run on Windows, so keep CRLF in the working tree.
+*.ps1 text eol=crlf

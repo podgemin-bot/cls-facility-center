@@ -1,0 +1,36 @@
+# Caddy reverse proxy for CLS Facility Center.
+# bootstrap-ubuntu.sh replaces __CLS_HOST__ / __ACME_EMAIL__ with the values you pass in.
+# If you change the domain later, edit this file and run: systemctl reload caddy
+
+__CLS_HOST__ {
+	encode zstd gzip
+
+	# Next.js must see the original scheme/host to build correct URLs.
+	reverse_proxy 127.0.0.1:3000 {
+		health_uri /login
+		health_interval 30s
+		health_timeout 5s
+	}
+
+	request_body {
+		max_size 12MB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(), microphone=(), camera=()"
+		-Server
+	}
+
+	log {
+		output file /var/log/caddy/cls-access.log {
+			roll_size 20mb
+			roll_keep 10
+			roll_keep_for 720h
+		}
+		format json
+	}
+}
