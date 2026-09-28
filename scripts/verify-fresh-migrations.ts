@@ -64,10 +64,10 @@ async function main() {
 
     const requiresExactCase = lowerCaseRows[0]?.value === 0;
     if (
-      migrationRows[0]?.count !== 5n ||
-      compatibleTableRows[0]?.count !== 1n ||
-      (requiresExactCase && tableRows[0]?.count !== 1n) ||
-      legacyRows[0]?.count !== 0n
+      migrationRows[0]?.count !== BigInt(5) ||
+      compatibleTableRows[0]?.count !== BigInt(1) ||
+      (requiresExactCase && tableRows[0]?.count !== BigInt(1)) ||
+      legacyRows[0]?.count !== BigInt(0)
     ) {
       throw new Error("fresh migration verification failed");
     }
