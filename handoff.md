@@ -2,12 +2,18 @@
 
 Thai cable-landing-station (CLS) facility center web app for NT (ปากบารา/ปัตตานี PKB, สงขลา SKA).
 
-**Repo: `https://github.com/podgemin-bot/cls-facility-center` (Private, clean history)**
+**Repo ที่ใช้งานจริง: `https://github.com/podgemin-bot/cls-facility-center` (Private, clean history)**
+
+> **สำคัญ:** repo นี้แยกจาก working directory บนเครื่อง
+> - Clean repo (GitHub, push แล้ว): `C:\Users\PC\AppData\Local\Temp\opencode\cls-facility-center-clean`
+> - Working copy ที่ใช้ dev อยู่: `E:\AI\Project\Opencode\CLS data collection\nextjs-ai-nt-2-main`
+> - Working copy ยังเป็น git repo ของโปรเจกต์เก่า (`origin` = `podgemin-bot/cls-database`, Private) และ **ยังมีงาน uncommitted ทั้งหมดอยู่** — ใช้เป็น local dev เท่านั้น อย่า push กลับไปที่ `cls-database`
+> - เวลาจะ commit ของใหม่ ให้ทำใน **clean repo**
 
 ## ที่มาของ repo นี้
 - เดิมเป็น `podgemin-bot/cls-database` ซึ่งเคยเป็น Public และมีข้อมูลจริงใน history (Excel, `public/storage` 144 ไฟล์ ~45 MiB)
 - Repo เดิมถูกเปลี่ยนเป็น Private แล้ว แต่ **ข้อมูลที่เคย commit ไปแล้วถือว่ารั่วแล้ว** — การลบจาก commit ล่าสุดไม่ลบออกจาก history
-- Repo นี้ถูกสร้างใหม่จาก clean snapshot: ไม่มี `.env`, Excel, รูปจริง, DB dump, `public/storage`, dependencies, build output
+- Clean repo ถูกสร้างจาก snapshot ที่ตัด `.git`, dependencies, build output, `.data/`, `public/storage/`, `.env`, logs ออก
 - **ห้าม commit ต่อไป:** `.env`, `.data/`, `CLS from AGY/`, `*.xlsx`, `public/storage/`, build/cache/logs, `BETTER_AUTH_SECRET`, DB credentials
 
 ## Stack
@@ -39,16 +45,20 @@ npm.cmd run storage:migrate # ย้ายรูปเข้า private storage 
 - `PRIVATE_STORAGE_ROOT` ต้องอยู่นอก `public/` และบน persistent storage ใน production (เช่น `/srv/cls-data`) — `getPrivateStorageRoot()` จะ throw ถ้าอยู่ใต้ `public/`
 - `.gitignore` ครอบ `.env*`, `.data/`, `dev.log`, `dev.err.log`, `prod.*.log`, `deploy.*.log`, `.dev-server.pid`, `node_modules`, `.next`, `out`, `build`, `coverage` แล้ว
 
-## Production deployment decision
-- **มติสุดท้าย: ไม่ใช้ Docker** — เก็บ `Dockerfile`/`docker-entrypoint.sh` ไว้เป็น fallback เท่านั้น
-- **Host:** Oracle Cloud Always Free VM (Ampere A1 ARM64, Ubuntu)
-- **Runtime:** Node.js 22.12+ + `npm run start` ภายใต้ `systemd`; build บน ARM64 VM โดยตรง ห้าม copy `.next`/`node_modules` จาก Windows x64
-- **Database:** MariaDB บน VM เดียวกัน, bind เฉพาะ `127.0.0.1`, ใช้ database user แยกจาก root, ไม่เปิด 3306 สู่อินเทอร์เน็ต
-- **HTTPS:** DuckDNS + Caddy ก่อน; เมื่อมีโดเมนองค์กรย้าย DNS ไป Cloudflare Free แล้วเปลี่ยน `BETTER_AUTH_URL` เป็น canonical HTTPS URL
-- **CI:** GitHub Actions สำหรับ test/typecheck/lint/build แล้ว SSH ไปสั่ง deploy
-- **Backup:** dump MariaDB + รูปรายวันไป private OCI Object Storage พร้อม retention และทดสอบ restore
-- **ข้อจำกัด:** Always Free ไม่มี SLA, capacity อาจเต็มและ resource อาจถูก reclaim; ถ้าต้องการ availability รับประกันให้ย้ายสถาปัตยกรรมไป VPS แบบเสียเงิน
-- **ไม่เลือก:** GitHub Pages/Cloudflare Pages (static ไม่รัน auth/Prisma/Server Actions), Cloudflare Workers (ต้อง rewrite ไป vinext/R2/D1, Free จำกัด CPU/RAM), Vercel Hobby (non-commercial + payload 4.5 MB < ระบบอนุญาต 10 MB)
+## Dev server (สถานะล่าสุด)
+- รันอยู่ที่ **http://localhost:3000** (Next.js 16.3.6, Turbopack) — PID บันทึกที่ `.dev-server.pid`
+- Network: `http://192.168.1.48:3000`
+- Log: `dev.log` / `dev.err.log` ที่ app root
+- เริ่มใหม่: `npm.cmd run dev` (ถ้าพอร์ต 3000 ยังถูกจอง ให้ kill process ที่ค้างก่อน แล้วลบ `.dev-server.pid`)
+
+### บัญชีทดสอบบน dev DB (ยืนยันว่า login ได้จริงทั้งหมด)
+| Email | Password | Role |
+|---|---|---|
+| `admin@cls.local` | `AdminPass123!` | ADMIN |
+| `editor@cls.local` | `EditorPass123!` | EDITOR |
+| `viewer@cls.local` | `ViewerPass123!` | VIEWER |
+
+รหัสผ่านเป็นแบบ `Name+Pass123!` ที่คาดเดาง่าย — **ต้องเปลี่ยนทั้งหมดก่อนขึ้น production** และล้างบัญชี test/UAT (`test-admin@example.com`, `test-admin2@example.com`, `test-admin3@example.com`)
 
 ## Auth & Protected routes
 - **Security boundary จริง:** `src/lib/auth-session.ts` → `getCurrentSession()` (React `cache`) และ `requireSession()` ที่ validate ผ่าน `auth.api.getSession()` แล้ว `redirect("/login")`
@@ -57,9 +67,10 @@ npm.cmd run storage:migrate # ย้ายรูปเข้า private storage 
 - Protected: `/`, `/rooms`, `/locations`, `/floorplan`, `/engineering`, `/customers`, `/profile`, `/admin`
 - **Public signup ปิดแล้ว:** `src/app/(auth)/signup/page.tsx` redirect ไป `/login`; `src/app/api/auth/[...all]/route.ts` บล็อก `POST /api/auth/sign-up/email` ด้วย `404` → ให้ ADMIN สร้างบัญชีผ่านหน้า `/admin`
 - callbackURL sanitized: รับเฉพาะ path ที่ขึ้นต้น `/` และไม่ขึ้นต้น `//` (กัน open redirect ไป host อื่น)
-- Role: `ADMIN` / `EDITOR` / `VIEWER` (field `user.role`)
+- Role: `ADMIN` / `EDITOR` / `VIEWER` (field `user.role`) — page-level RBAC อยู่ในแต่ละ `page.tsx`; server actions มี `requireAdmin()` / role check ซ้ำ
 - Session cookie เป็น **signed cookie** (HMAC ด้วย `BETTER_AUTH_SECRET`) ค่า raw token ใน DB ใช้ตรง ๆ ไม่ได้ ต้องเอาจาก `auth.api.*` + `returnHeaders: true`
 - `src/lib/auth.ts` ตั้ง logger เป็น `warn` เมื่อ `NODE_ENV=production` (debug เฉพาะ dev)
+- ตรวจแล้ว: `viewer@cls.local` เข้า `/admin` ได้ HTTP 200 แต่เห็นข้อความ "หน้านี้เฉพาะผู้ดูแลระบบ (Admin) เท่านั้น" และ **HTML ไม่มีอีเมลผู้ใช้หลุด** (query รายชื่อถูกข้ามก่อน render) — เป็นพฤติกรรมที่ถูกต้อง
 
 ## Private images
 - `src/lib/private-images.ts` — ทุกรูปอยู่นอก `public/` ภายใต้ `PRIVATE_STORAGE_ROOT`
@@ -75,6 +86,7 @@ npm.cmd run storage:migrate # ย้ายรูปเข้า private storage 
 - เดิมรูปทั้งหมดถูกย้ายจาก `public/storage` เข้า `.data` แล้ว (144 ไฟล์, 47,129,538 bytes, checksum ผ่าน) และ `floorImage` ใน DB เก็บเป็นชื่อไฟล์แทน path
 - `scripts/migrate-private-storage.ts` เป็น idempotent (รันซ้ำได้) — `--apply` เพื่อเขียนจริง
 - DB เก็บแค่ชื่อไฟล์ ดังนั้นย้าย `PRIVATE_STORAGE_ROOT` ต้อง copy ไฟล์ตามไปด้วย
+- ต้นฉบับรูปทั้งหมดยังอยู่ที่ `E:\AI\Project\Opencode\CLS data collection\CLS from AGY\storage` (144 ไฟล์) — **อยู่นอก clean repo**
 
 ## Pages (src/app/(front))
 | Route | ฟีเจอร์ |
@@ -86,7 +98,7 @@ npm.cmd run storage:migrate # ย้ายรูปเข้า private storage 
 | `/engineering` | Power/AC/certificate/security tabs + AssetDialog/SecurityEditDialog/CertDialog |
 | `/customers` | ข้อมูลบริษัท/ผู้ติดต่อ: ตำแหน่ง, โทรศัพท์, อีเมล, หมายเหต่า, search |
 | `/profile` | แก้ชื่อ / เปลี่ยนรหัสผ่าน / จัดการ session |
-| `/admin` | User/role management (ADMIN เท่านั้น) |
+| `/admin` | User/role management (ADMIN เท่านั้น — non-ADMIN เห็นข้อความปฏิเสธ) |
 | `/login` | auth (public) |
 | `/signup` | ปิดแล้ว — redirect ไป `/login` |
 
@@ -97,8 +109,23 @@ npm.cmd run storage:migrate # ย้ายรูปเข้า private storage 
 - CLS data: sites/buildings/floors/rooms + engineering (asset/certificate) + security
 - Migration ล่าสุด: `20260926000000_add_code_sequence` (5 migrations ทั้งหมด)
 
+## Scripts
+| ไฟล์ | หน้าที่ |
+|---|---|
+| `scripts/verify-fresh-migrations.ts` | `npm run db:verify-fresh` — สร้าง DB ชั่วคราว, `migrate deploy` 2 รอบ, ตรวจ 5 migrations + `RoomSecurity` casing + ไม่มี legacy columns แล้วลบทิ้ง |
+| `scripts/migrate-private-storage.ts` | `npm run storage:migrate` — ย้ายรูปจาก layout เดิมเข้า private storage, idempotent |
+| `scripts/list-users.ts` | ดูรายชื่อผู้ใช้ + role (ไม่แสดงรหัสผ่าน) — `npx tsx scripts/list-users.ts` |
+| `scripts/reset-password.ts` | รีเซ็ตรหัสผ่านจาก DB โดยตรง — `NEW_PASSWORD=... npx tsx scripts/reset-password.ts <email>` (revoke session เก่าด้วย, ตรวจ hash ด้วย `verifyPassword` ก่อนบันทึก) |
+| `scripts/import.ts` | import จาก Excel — **ห้ามรันอัตโนมัติตอน deploy** เพราะลบ facility records และไฟล์รูป |
+| `scripts/export-database.ts` | export DB เป็น Excel ให้ตรงกับหน้าเว็บ |
+| `scripts/*-smoke.ts`, `scripts/profile-http-smoke.ts` | smoke test ยิง dev server ผ่าน better-auth HTTP |
+| `scripts/uat-card-layout.ts` | UAT card layout ผ่าน playwright-core + Chrome headless (ต้องรัน dev server ก่อน) |
+| `scripts/backfill-security-defaults.ts`, `scripts/normalize-security.ts`, `scripts/seed-customers.ts` | maintenance scripts (รันซ้ำส่วนใหญ่ปลอดภัย) |
+
+> `list-users.ts` และ `reset-password.ts` เพิ่งถูกสร้างใน working copy และ **ยังไม่ได้ copy เข้า clean repo** — ต้องตัดสินใจว่าจะเพิ่มเข้า repo ไหม (ดู "งานค้าง")
+
 ## Testing
-`npm.cmd test` → **31 files / 289 tests** ผ่าน พร้อม `tsc --noEmit`, ESLint (0 error) และ `npm run build` (warning-free)
+`npm.cmd test` → **31 files / 289 tests** ผ่าน พร้อม `npx tsc --noEmit`, ESLint (0 error) และ `npm run build` (warning-free)
 
 Tests ระดับ integration ใช้ DB จริง (mock auth ผ่าน `vi.mock`; สร้าง temp user + cleanup เอง) — **ระวังว่าจะ mutate ข้อมูลใน DB จริง**
 - `src/proxy.test.ts` — proxy guard (มี both cookie names)
@@ -111,22 +138,39 @@ Tests ระดับ integration ใช้ DB จริง (mock auth ผ่า
 - `src/app/(front)/**/*.test.tsx` — component tests (jsdom) ทุกหน้า
 - `src/components/*.test.tsx`, `src/components/ui/table.test.tsx`
 - `vitest.config.ts` alias `@` → `src` และ stub `server-only` ผ่าน `src/test/server-only.ts`; jsdom ต่อไฟล์ด้วย pragma `// @vitest-environment jsdom`
-- `scripts/verify-fresh-migrations.ts` — สร้าง DB ชั่วคราว, `migrate deploy` 2 รอบ, ตรวจ 5 migrations + `RoomSecurity` casing + ไม่มี legacy columns แล้วลบทิ้ง
+
+**ข้อควรระวังเรื่อง TypeScript:** `tsconfig.json` ตั้ง `target: ES2017` ซึ่ง **ไม่รองรับ BigInt literals** (`5n`, `1n`) — ถ้าเขียนสคริปต์ที่ query `COUNT(*)` ให้ใช้ `BigInt(5)` แทน ไม่งั้น `tsc --noEmit` จะ error
+
+## Production deployment decision
+- **มติสุดท้าย: ไม่ใช้ Docker** — เก็บ `Dockerfile`/`docker-entrypoint.sh` ไว้เป็น fallback เท่านั้น
+- **Host:** Oracle Cloud Always Free VM (Ampere A1 ARM64, Ubuntu)
+- **Runtime:** Node.js 22.12+ + `npm run start` ภายใต้ `systemd`; build บน ARM64 VM โดยตรง ห้าม copy `.next`/`node_modules` จาก Windows x64
+- **Database:** MariaDB บน VM เดียวกัน, bind เฉพาะ `127.0.0.1`, ใช้ database user แยกจาก root, ไม่เปิด 3306 สู่อินเทอร์เน็ต
+- **HTTPS:** DuckDNS + Caddy ก่อน; เมื่อมีโดเมนองค์กรย้าย DNS ไป Cloudflare Free แล้วเปลี่ยน `BETTER_AUTH_URL` เป็น canonical HTTPS URL
+- **CI:** GitHub Actions สำหรับ test/typecheck/lint/build แล้ว SSH ไปสั่ง deploy
+- **Backup:** dump MariaDB + รูปรายวันไป private OCI Object Storage พร้อม retention และทดสอบ restore
+- **ข้อจำกัด:** Always Free ไม่มี SLA, capacity อาจเต็มและ resource อาจถูก reclaim; ถ้าต้องการ availability รับประกันให้ย้ายสถาปัตยกรรมไป VPS แบบเสียเงิน
+- **ไม่เลือก:** GitHub Pages/Cloudflare Pages (static ไม่รัน auth/Prisma/Server Actions), Cloudflare Workers (ต้อง rewrite ไป vinext/R2/D1, Free จำกัด CPU/RAM), Vercel Hobby (non-commercial + payload 4.5 MB < ระบบอนุญาต 10 MB)
 
 ## ประวัติ security hardening (2026-09-28)
 1. **Gitleaks scan:** history เดิม 41 commits พบ 1 placeholder ใน `.env.example` ไม่ตรงกับ `.env` local และไม่ใช่ secret จริง; clean snapshot scan ผ่าน ไม่พบ leak
-2. **Repo เดิม → Private**, สร้าง clean private repo ใหม่, push `main`
+2. **Repo เดิม → Private**, สร้าง clean private repo `podgemin-bot/cls-facility-center` แล้ว push `main` (verified: anonymous API → `404`)
 3. **Auth hardening:** เพิ่ม `auth-session.ts`, enforce ที่ `(front)/layout.tsx`, secure-cookie support, ปิด signup, safe callbackURL, ลด production log เป็น `warn`
 4. **Private images:** ย้าย 144 ไฟล์ออกจาก `public/`, เพิ่ม authenticated read routes, MIME + magic-byte validation, atomic write
 5. **Portability:** แก้ `RoomSecurity` casing, `connectionLimit`/`acquireTimeout`, pin Node 22.12, เพิ่ม `db:verify-fresh`, อัปเดต README เป็น systemd-first
 6. **Dependencies:** Next.js `16.3.1` → `16.3.6` (ปิด critical advisory), Prisma → `7.10.0`, เพิ่ม explicit `server-only` และ `playwright-core`
+7. **Fix:** `scripts/verify-fresh-migrations.ts` ใช้ BigInt literals ซึ่งขัดกับ `target: ES2017` → เปลี่ยนเป็น `BigInt()` (typecheck เคย fail 4 errors)
+8. **Cleanup:** เก็บ trailing whitespace / blank line ท้ายไฟล์ 3 ไฟล์ให้ `git diff --check` สะอาด
 
 ## งานค้าง / ความเสี่ยงที่เหลือ
 - **ยังไม่ได้ทดสอบบน Linux ARM64 จริง** — `db:verify-fresh` ผ่านบน Windows local MariaDB ที่ `lower_case_table_names=1` เท่านั้น (สคริปต์จะบังคับตรวจ exact-case เมื่อค่าเป็น 0) ต้องรันซ้ำบน Ubuntu ARM64 ก่อน deploy
 - **`npm audit` เหลือ 7 รายการ (1 moderate, 6 high)** จาก Prisma/MariaDB/MySQL2/xlsx ที่ยังไม่มี compatible fix — ต้องตัดสินใจว่าจะยอมรับหรือลด dependency
-- **Production data ยังไม่ได้เตรียม:** ล้าง test/UAT accounts, ตรวจ `CodeSequence`, dump MariaDB แบบ transaction, สร้าง `BETTER_AUTH_SECRET` ใหม่ (`openssl rand -base64 32`)
+- **Working copy ยังมีงาน uncommitted ทั้งหมด** และยังชี้ `origin` ไปที่ `cls-database` — ต้องระวังไม่ push ผิกที่
+- **`list-users.ts` / `reset-password.ts` ยังไม่ได้อยู่ใน clean repo** — ตัดสินใจว่าจะ commit เข้าไหม (`reset-password.ts` เขียน password hash ลง DB โดยตรง ไม่ต้องมี ADMIN session — เหมาะกับ ops recovery แต่ต้องระวังสิทธิ์ไฟล์และการหลุดของรหัสผ่านใน shell history)
+- **Production data ยังไม่ได้เตรียม:** เปลี่ยนรหัสผ่านทั้ง 3 บัญชี dev, ล้าง test/UAT accounts (`test-admin*`), ตรวจ `CodeSequence`, dump MariaDB แบบ transaction, สร้าง `BETTER_AUTH_SECRET` ใหม่
 - **ยังไม่ได้ provision Oracle VM** และยังไม่มี GitHub Actions workflow
 - **การรั่วไหลในอดีตย้อนกลับไม่ได้** — ถือว่าข้อมูล/รูปที่เคยอยู่ใน public repo อาจถูกเข้าถึงแล้ว ควรพิจารณาหมุนข้อมูลที่เป็นความลับ
+- **ไฟล์รหัสผ่านชั่วคราว** `C:\Users\PC\AppData\Local\Temp\opencode\cls-admin-pw.txt` (plaintext) — ลบได้แล้ว ไม่ใช้อีก
 
 ## โน้ตที่ยังใช้ได้
 - **Prisma 7 CLI:** `migrate deploy` ต้องมี `prisma.config.ts` (datasource url) — `schema.prisma` อย่างเดียวไม่พอ; `migrate diff --from-migrations` ต้องมี `shadowDatabaseUrl` (flags เก่า `--to-schema-datamodel`/`--shadow-database-url` ถูกลบแล้ว) — ใช้ `--from-config-datasource --to-schema ...` ตรวจ drift แทน
@@ -134,16 +178,20 @@ Tests ระดับ integration ใช้ DB จริง (mock auth ผ่า
 - **ถ้าหน้าไหนค้างที่ "Rendering" หลัง action** ให้เรียก `router.refresh()` ฝั่ง client หลัง action สำเร็จ (pattern เดียวกับ engineering/floorplan/rooms/locations/customers/admin/profile) — ตอนนี้ครบทุกหน้าแล้ว
 - **Hydration warning ใน dev** เป็น transient noise ของ `cacheComponents` + Turbopack — post-hoc probes reproduce ไม่ได้ ไม่ใช่ code bug
 - **สคริปต์ใน `scripts/` ที่เปิด `prisma` ต้อง `process.exit()` ตอนจบ** ไม่งั้น process ค้างที่ connection pool
+- **PowerShell 5.1 บนเครื่องนี้อ่านภาษาไทยเป็น `?`** — ต้องใช้ `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8` + `WebClient.Encoding = UTF8` เพื่ออ่าน HTML ที่มีภาษาไทย
+- **`[System.Web.Security.Membership]` ใช้ไม่ได้** ใน PowerShell 5.1 (ไม่ได้ load assembly) — สร้างรหัสผ่านสุ่มด้วย `node -e "...crypto.randomInt..."` แทน
+- **Env var ไม่ทำงานข้าม bash tool call** (แต่ละ call เป็น process ใหม่) — ต้อง generate + ใช้รหัสผ่านในคำสั่งเดียวกัน
 - `AGENTS.md`: Next.js เวอร์ชันนี้มี breaking changes — อ่าน `node_modules/next/dist/docs/` ก่อนเขียนโค้ด
 - **counter `CUST` ใน dev DB มีช่องว่าง (~40)** จาก concurrency test — รหัสลูกค้าใหม่จะโดดเช่น `CUST-04x`; รีเซ็ตได้ด้วย `UPDATE CodeSequence SET lastValue = 5 WHERE prefix = 'CUST'` (เฉพาะเมื่อยืนยันว่ารหัส 6-4x ไม่ได้ใช้จริง)
 - **ห้ามรัน `scripts/import.ts` อัตโนมัติระหว่าง deploy** เพราะลบ facility records และไฟล์รูป — ใช้ dump/restore สำหรับ production
 
 ## งานที่จะทำต่อ
-1. Provision Oracle Always Free ARM64 VM: เลือก home region ใกล้ไทยที่มี A1 capacity, Ubuntu + SSH key + persistent volume, firewall เปิดเฉพาะ 22/80/443, ติดตั้ง Node 22.12 / MariaDB / Caddy / systemd
-2. บน VM: `npm ci` → `npx prisma generate` → `npm run lint` → `npm test` → `npx tsc --noEmit` → `npm run build` → **`npm run db:verify-fresh`** (ต้องผ่านบน Linux case-sensitive)
-3. เตรียม production data: ล้าง test/UAT accounts, ตรวจ `CodeSequence`, `mysqldump` แบบ transaction, copy private storage ไป `/srv/cls-data`, สร้าง `BETTER_AUTH_SECRET` ใหม่
-4. Deploy แบบ release directory: build บน ARM64, `migrate deploy` ครั้งเดียวก่อนสลับ release, health-check `/login`, restart ผ่าน systemd, rollback ได้ (DB migration ต้อง backup ก่อน)
-5. ตั้ง GitHub Actions: test + typecheck + ESLint + build; เมื่อ main ผ่านจึง SSH ไปสั่ง deploy โดยไม่ส่ง Windows/x64 artifacts
-6. ตั้ง URL/HTTPS: DuckDNS + Caddy, ตั้ง `BETTER_AUTH_URL=https://...`; เมื่อได้โดเมนองค์กรค่อยย้าย DNS ไป Cloudflare และบังคับ canonical host
-7. Backup/monitoring: dump DB + รูปรายวันไป private OCI Object Storage, retention 7 daily / 4 weekly, disk/service health alerts และทดสอบ restore จริง
-8. Production UAT ก่อน go-live: ทุก route/role/CRUD/floorplan/photo, forged-cookie + public-file denial, HTTPS cookie, reboot persistence, ไม่มี port 3306 เปิด, mobile 390px + desktop 1280px
+1. **ตัดสินใจเรื่อง scripts:** copy `list-users.ts` + `reset-password.ts` เข้า clean repo แล้ว commit หรือไม่
+2. Provision Oracle Always Free ARM64 VM: เลือก home region ใกล้ไทยที่มี A1 capacity, Ubuntu + SSH key + persistent volume, firewall เปิดเฉพาะ 22/80/443, ติดตั้ง Node 22.12 / MariaDB / Caddy / systemd
+3. บน VM: `npm ci` → `npx prisma generate` → `npm run lint` → `npm test` → `npx tsc --noEmit` → `npm run build` → **`npm run db:verify-fresh`** (ต้องผ่านบน Linux case-sensitive)
+4. เตรียม production data: เปลี่ยนรหัสผ่านทั้ง 3 บัญชี dev, ล้าง `test-admin*` accounts, ตรวจ `CodeSequence`, `mysqldump` แบบ transaction, copy private storage ไป `/srv/cls-data`, สร้าง `BETTER_AUTH_SECRET` ใหม่
+5. Deploy แบบ release directory: build บน ARM64, `migrate deploy` ครั้งเดียวก่อนสลับ release, health-check `/login`, restart ผ่าน systemd, rollback ได้ (DB migration ต้อง backup ก่อน)
+6. ตั้ง GitHub Actions: test + typecheck + ESLint + build; เมื่อ main ผ่านจึง SSH ไปสั่ง deploy โดยไม่ส่ง Windows/x64 artifacts
+7. ตั้ง URL/HTTPS: DuckDNS + Caddy, ตั้ง `BETTER_AUTH_URL=https://...`; เมื่อได้โดเมนองค์กรค่อยย้าย DNS ไป Cloudflare และบังคับ canonical host
+8. Backup/monitoring: dump DB + รูปรายวันไป private OCI Object Storage, retention 7 daily / 4 weekly, disk/service health alerts และทดสอบ restore จริง
+9. Production UAT ก่อน go-live: ทุก route/role/CRUD/floorplan/photo, forged-cookie + public-file denial, HTTPS cookie, reboot persistence, ไม่มี port 3306 เปิด, mobile 390px + desktop 1280px
