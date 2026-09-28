@@ -78,6 +78,16 @@ for (const name of scripts) {
   shellCheck(label, script);
 }
 
+// ------------------------------------------------- scripts/provision-oci.sh
+// OCI provisioning only runs from Cloud Shell / a Linux workstation, never on
+// the VM or in the app test suite, so treat it like a deploy script.
+const provisionPath = path.join(repoRoot, "scripts", "provision-oci.sh");
+if (fs.existsSync(provisionPath)) {
+  const script = fs.readFileSync(provisionPath, "utf8");
+  syntaxCheck("scripts/provision-oci.sh", script);
+  shellCheck("scripts/provision-oci.sh", script);
+}
+
 // ------------------------------------------------- run: blocks in the workflows
 const workflowDir = path.join(repoRoot, ".github", "workflows");
 if (fs.existsSync(workflowDir)) {
