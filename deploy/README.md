@@ -113,9 +113,27 @@ timer fires.
 
 ## 6. Go-live checklist
 
+Run the automated gate first. It is HTTP only, needs no database access, and
+covers most of the list below:
+
+```bash
+UAT_BASE_URL=https://cls.example.com \
+UAT_ADMIN_EMAIL=... UAT_ADMIN_PASSWORD=... \
+UAT_EDITOR_EMAIL=... UAT_EDITOR_PASSWORD=... \
+UAT_VIEWER_EMAIL=... UAT_VIEWER_PASSWORD=... \
+  npm run uat:production
+```
+
+It refuses to run over plain http, reads no secrets from disk, and writes
+nothing unless `UAT_ALLOW_WRITES=1` is set. Add `UAT_ALLOW_WRITES=1` for the
+one write-path check.
+
+- [ ] `npm run uat:production` passes with no skipped role checks
 - [ ] `ss -ltnp | grep 3306` shows `127.0.0.1:3306` only
 - [ ] `npm run user:reset` used to rotate all dev accounts, `test-admin*` accounts deleted (`npm run user:list`)
 - [ ] `BETTER_AUTH_URL` matches the public URL exactly; cookies are `Secure`
 - [ ] `forged cookie` and direct hits on `/api/rooms/*/photos/*` are rejected while signed in
+- [ ] room, asset and floorplan create/edit/delete exercised in a browser (not covered by the HTTP gate)
 - [ ] `sudo reboot` → service comes back, data and photos still there
 - [ ] one real `backup.sh` run uploaded, and `restore.sh --verify-only` passed
+- [ ] mobile 390px and desktop 1280px layouts checked for the tables (Thai text does not overflow)

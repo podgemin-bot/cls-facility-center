@@ -72,6 +72,7 @@ npm run dev
 | `npm run user:list` | ดูรายชื่อผู้ใช้ + role (ไม่แสดงรหัสผ่าน) |
 | `npm run user:reset -- <email>` | รีเซ็ตรหัสผ่านจาก DB โดยตรง (ดูหมายเหตุด้านล่าง) |
 | `npm run user:delete -- <email> --yes` | ลบผู้ใช้ถาวร (session/account ถูก cascade) |
+| `npm run uat:production` | acceptance gate สำหรับ host ที่ deploy แล้ว (HTTP only, ไม่แตะ DB) |
 
 ## กู้คืนการเข้าสู่ระบบ (ops)
 
@@ -99,6 +100,23 @@ NEW_PASSWORD='...' npm run user:reset -- admin@example.com
 npm run user:list                                    # ตรวจก่อนว่าจะลบใคร
 npm run user:delete -- test-admin@example.com --yes
 ```
+
+## ตรวจรับงาน production (UAT)
+
+`npm run uat:production` เป็นเกณฑ์ผ่านก่อน go-live — คุยกับ host ที่ deploy แล้วผ่าน **HTTP อย่างเดียว** ไม่ต่อฐานข้อมูล ไม่ import จาก `src/` (สคริปต์ `scripts/*-e2e-smoke.ts` เดิม import `prisma` จึงรันได้แค่บนเครื่องที่มี DB credentials ซึ่งใช้ตรวจ host จริงไม่ได้)
+
+ตรวจ: TLS + security headers, cookie `__Secure-`, ปิด public sign-up, redirect ของ unauthenticated/forged cookie, ไม่มีรูปหลุดทั้งจาก private route และ path เก่าใน `public/`, login ทั้ง 3 role, RBAC ของ `/admin` (รวมการกันไม่ให้ email ของ admin หลุด), และ origin guard ของ Server Actions (จับได้กรณี Caddy ทำ `X-Forwarded-Host` ผิด)
+
+```bash
+# บังคับให้เป็น https (ถ้าใส่ http จะไม่ยอมรับว่าผ่าน) และไม่เขียนอะไรลง production
+UAT_BASE_URL=https://cls.example.com \
+UAT_ADMIN_EMAIL=... UAT_ADMIN_PASSWORD=... \
+UAT_EDITOR_EMAIL=... UAT_EDITOR_PASSWORD=... \
+UAT_VIEWER_EMAIL=... UAT_VIEWER_PASSWORD=... \
+  npm run uat:production
+```
+
+เพิ่ม `UAT_ALLOW_WRITES=1` เพื่อทดสอบ write path (ค่าเริ่มต้นคือ read-only) และ `UAT_ALLOW_HTTP=1` สำหรับ dry run บน localhost — รหัสผ่านมาจาก env เท่านั้น ไม่ถูกพิมพ์ออกมา
 
 ## Role / สิทธิ์
 

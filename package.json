@@ -16,6 +16,7 @@
     "user:list": "tsx scripts/list-users.ts",
     "user:reset": "tsx scripts/reset-password.ts",
     "user:delete": "tsx scripts/delete-user.ts",
+    "uat:production": "tsx scripts/production-uat.ts",
     "lint": "eslint",
     "test": "vitest run"
   },
