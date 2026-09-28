@@ -38,31 +38,60 @@ jobs:
 
       - name: Resolve the ref to deploy
         id: ref
+        env:
+          REQUESTED_REF: ${{ inputs.ref || github.event.workflow_run.head_sha }}
         run: |
-          sha="$(git rev-parse "${{ inputs.ref || github.event.workflow_run.head_sha }}^{commit}")"
+          set -euo pipefail
+          sha="$(git rev-parse "$REQUESTED_REF^{commit}")"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "Deploying $sha"
 
       - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          printf '%s\n' "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
+          set -euo pipefail
+          # actions/checkout only uses the key for its own git fetch, so the same
+          # key has to be on disk for the scp and ssh calls below.
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/deploy_key ~/.ssh/known_hosts
+          ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null
 
       - name: Upload deploy scripts
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         run: |
-          scp deploy/release.sh deploy/backup.sh deploy/restore.sh \
-            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/tmp/"
-          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+          set -euo pipefail
+          target="$DEPLOY_USER@$DEPLOY_HOST"
+          scp -i ~/.ssh/deploy_key -o IdentitiesOnly=yes \
+            deploy/release.sh deploy/backup.sh deploy/restore.sh "$target:/tmp/"
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$target" \
             "sudo install -m 0750 -o root -g root /tmp/release.sh /tmp/backup.sh /tmp/restore.sh /opt/cls-facility/bin/ && rm -f /tmp/release.sh /tmp/backup.sh /tmp/restore.sh"
 
       - name: Deploy
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          SHA: ${{ steps.ref.outputs.sha }}
+          FULL: ${{ inputs.full }}
         run: |
-          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
-            "/opt/cls-facility/bin/release.sh --ref ${{ steps.ref.outputs.sha }} --yes ${{ inputs.full && '--full' || '' }}"
+          set -euo pipefail
+          target="$DEPLOY_USER@$DEPLOY_HOST"
+          extra=""
+          if [[ "$FULL" == "true" ]]; then extra="--full"; fi
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$target" \
+            "/opt/cls-facility/bin/release.sh --ref $SHA --yes $extra"
 
       - name: Smoke check
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         run: |
-          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+          set -euo pipefail
+          target="$DEPLOY_USER@$DEPLOY_HOST"
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$target" \
             "curl -fsS -o /dev/null --max-time 15 http://127.0.0.1:3000/login && systemctl is-active cls-facility && readlink -f /opt/cls-facility/current"

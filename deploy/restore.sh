@@ -91,6 +91,12 @@ if (( VERIFY_ONLY )); then
   log "verify-only: restoring into throwaway database $TARGET_DB"
 else
   (( ASSUME_YES )) || die "refusing to overwrite $SOURCE_DB without --yes"
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  [[ -x "$SCRIPT_DIR/backup.sh" ]] || die "cannot find an executable $SCRIPT_DIR/backup.sh"
+  # The drop below is irreversible, so snapshot what is there now. If the dump
+  # being restored is the wrong one, this file is the only way back.
+  log "taking a safety dump of the current $SOURCE_DB before overwriting it"
+  "$SCRIPT_DIR/backup.sh" --db-only || die "safety dump failed, refusing to restore"
   log "about to overwrite database $SOURCE_DB"
 fi
 
@@ -107,8 +113,14 @@ fi
 
 TABLES="$(mariadb --defaults-extra-file="$MYSQL_DEFAULTS" -N -B -e \
   "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = '$TARGET_DB';")"
+# The Prisma model maps to the lowercase table name, and the VM runs with
+# lower_case_table_names = 0, so `User` would not resolve there.
 USERS="$(mariadb --defaults-extra-file="$MYSQL_DEFAULTS" -N -B -e \
-  "SELECT COUNT(*) FROM \`$TARGET_DB\`.\`User\`;")" 2>/dev/null || echo "n/a"
+  "SELECT COUNT(*) FROM \`$TARGET_DB\`.\`user\`;" 2>/dev/null || true)"
+if [[ -z "$USERS" ]]; then
+  USERS="unknown"
+  warn "no \`user\` table in $TARGET_DB — the dump looks incomplete"
+fi
 log "restored into $TARGET_DB: $TABLES tables, $USERS users"
 
 if (( VERIFY_ONLY )); then
