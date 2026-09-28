@@ -37,6 +37,8 @@ npm.cmd run db:push        # dev: sync schema
 npm.cmd run db:deploy      # production: apply migrations
 npm.cmd run db:verify-fresh # ทดสอบ migrate deploy บน DB ชั่วคราว 2 รอบ
 npm.cmd run storage:migrate # ย้ายรูปเข้า private storage (ครั้งเดียว)
+npm.cmd run user:list        # ดูรายชื่อผู้ใช้ + role (ไม่แสดงรหัสผ่าน)
+npm.cmd run user:reset -- <email>  # รีเซ็ตรหัสผ่านจาก DB โดยตรง (pipe รหัสผ่านเข้า stdin)
 ```
 
 ## Environment
@@ -114,15 +116,15 @@ npm.cmd run storage:migrate # ย้ายรูปเข้า private storage 
 |---|---|
 | `scripts/verify-fresh-migrations.ts` | `npm run db:verify-fresh` — สร้าง DB ชั่วคราว, `migrate deploy` 2 รอบ, ตรวจ 5 migrations + `RoomSecurity` casing + ไม่มี legacy columns แล้วลบทิ้ง |
 | `scripts/migrate-private-storage.ts` | `npm run storage:migrate` — ย้ายรูปจาก layout เดิมเข้า private storage, idempotent |
-| `scripts/list-users.ts` | ดูรายชื่อผู้ใช้ + role (ไม่แสดงรหัสผ่าน) — `npx tsx scripts/list-users.ts` |
-| `scripts/reset-password.ts` | รีเซ็ตรหัสผ่านจาก DB โดยตรง — `NEW_PASSWORD=... npx tsx scripts/reset-password.ts <email>` (revoke session เก่าด้วย, ตรวจ hash ด้วย `verifyPassword` ก่อนบันทึก) |
+| `scripts/list-users.ts` | `npm run user:list` — ดูรายชื่อผู้ใช้ + role (ไม่แสดงรหัสผ่าน) |
+| `scripts/reset-password.ts` | `npm run user:reset -- <email>` — รีเซ็ตรหัสผ่านจาก DB โดยตรง รับรหัสผ่านจาก `NEW_PASSWORD=` **หรือ stdin** (ป้องกันหลุดใน shell history) ไม่รับผ่าน argv, ไม่ log รหัสผ่าน/hash, `verifyPassword` ตรวจ hash ก่อนบันทึก และ revoke session เดิม |
 | `scripts/import.ts` | import จาก Excel — **ห้ามรันอัตโนมัติตอน deploy** เพราะลบ facility records และไฟล์รูป |
 | `scripts/export-database.ts` | export DB เป็น Excel ให้ตรงกับหน้าเว็บ |
 | `scripts/*-smoke.ts`, `scripts/profile-http-smoke.ts` | smoke test ยิง dev server ผ่าน better-auth HTTP |
 | `scripts/uat-card-layout.ts` | UAT card layout ผ่าน playwright-core + Chrome headless (ต้องรัน dev server ก่อน) |
 | `scripts/backfill-security-defaults.ts`, `scripts/normalize-security.ts`, `scripts/seed-customers.ts` | maintenance scripts (รันซ้ำส่วนใหญ่ปลอดภัย) |
 
-> `list-users.ts` และ `reset-password.ts` เพิ่งถูกสร้างใน working copy และ **ยังไม่ได้ copy เข้า clean repo** — ต้องตัดสินใจว่าจะเพิ่มเข้า repo ไหม (ดู "งานค้าง")
+> `list-users.ts` และ `reset-password.ts` **ย้ายเข้า clean repo แล้ว** (commit `ops: add user list/reset scripts`) พร้อม npm scripts `user:list` / `user:reset` — รายละเอียดการ harden ดูตารางด้านบน
 
 ## Testing
 `npm.cmd test` → **31 files / 289 tests** ผ่าน พร้อม `npx tsc --noEmit`, ESLint (0 error) และ `npm run build` (warning-free)
@@ -161,12 +163,13 @@ Tests ระดับ integration ใช้ DB จริง (mock auth ผ่า
 6. **Dependencies:** Next.js `16.3.1` → `16.3.6` (ปิด critical advisory), Prisma → `7.10.0`, เพิ่ม explicit `server-only` และ `playwright-core`
 7. **Fix:** `scripts/verify-fresh-migrations.ts` ใช้ BigInt literals ซึ่งขัดกับ `target: ES2017` → เปลี่ยนเป็น `BigInt()` (typecheck เคย fail 4 errors)
 8. **Cleanup:** เก็บ trailing whitespace / blank line ท้ายไฟล์ 3 ไฟล์ให้ `git diff --check` สะอาด
+9. **Ops scripts:** เพิ่ม `list-users.ts` + `reset-password.ts` เข้า repo พร้อม `user:list`/`user:reset`; harden `reset-password.ts` ให้รับรหัสผ่านจาก stdin (ไม่ตกใน shell history), ไม่รับผ่าน argv, ไม่ log รหัสผ่าน/hash และเตือนว่า bypass audit trail — ทดสอบ round-trip กับ `viewer@cls.local` (reset → login 200 → restore → login 200, รหัสผ่านเดิมยังใช้ได้)
 
 ## งานค้าง / ความเสี่ยงที่เหลือ
 - **ยังไม่ได้ทดสอบบน Linux ARM64 จริง** — `db:verify-fresh` ผ่านบน Windows local MariaDB ที่ `lower_case_table_names=1` เท่านั้น (สคริปต์จะบังคับตรวจ exact-case เมื่อค่าเป็น 0) ต้องรันซ้ำบน Ubuntu ARM64 ก่อน deploy
 - **`npm audit` เหลือ 7 รายการ (1 moderate, 6 high)** จาก Prisma/MariaDB/MySQL2/xlsx ที่ยังไม่มี compatible fix — ต้องตัดสินใจว่าจะยอมรับหรือลด dependency
-- **Working copy ยังมีงาน uncommitted ทั้งหมด** และยังชี้ `origin` ไปที่ `cls-database` — ต้องระวังไม่ push ผิกที่
-- **`list-users.ts` / `reset-password.ts` ยังไม่ได้อยู่ใน clean repo** — ตัดสินใจว่าจะ commit เข้าไหม (`reset-password.ts` เขียน password hash ลง DB โดยตรง ไม่ต้องมี ADMIN session — เหมาะกับ ops recovery แต่ต้องระวังสิทธิ์ไฟล์และการหลุดของรหัสผ่านใน shell history)
+- **Working copy ยังมีงาน uncommitted ทั้งหมด** และยังชี้ `origin` ไปที่ `cls-database` — ต้องระวังไม่ push ผิกที่ (เนื้อหา tracked ของ working copy ตรงกับ clean repo ทุกไฟล์ ยกเว้นไฟล์ที่ gitignore เช่น `.env`, `.data/`, logs)
+- **`reset-password.ts` เป็น ops tool ที่เขียนรหัสผ่านลง DB ได้โดยไม่มี session** — คนที่รันได้เท่ากับ bypass หน้า `/admin` ทั้งหมด จำกัดสิทธิ์ผู้ใช้ที่รัน shell บน VM, อย่าใส่รหัสผ่านใน argv, ล้างไฟล์/ตัวแปรรหัสผ่านหลังใช้ (รองรับ stdin แล้ว)
 - **Production data ยังไม่ได้เตรียม:** เปลี่ยนรหัสผ่านทั้ง 3 บัญชี dev, ล้าง test/UAT accounts (`test-admin*`), ตรวจ `CodeSequence`, dump MariaDB แบบ transaction, สร้าง `BETTER_AUTH_SECRET` ใหม่
 - **ยังไม่ได้ provision Oracle VM** และยังไม่มี GitHub Actions workflow
 - **การรั่วไหลในอดีตย้อนกลับไม่ได้** — ถือว่าข้อมูล/รูปที่เคยอยู่ใน public repo อาจถูกเข้าถึงแล้ว ควรพิจารณาหมุนข้อมูลที่เป็นความลับ
@@ -186,7 +189,7 @@ Tests ระดับ integration ใช้ DB จริง (mock auth ผ่า
 - **ห้ามรัน `scripts/import.ts` อัตโนมัติระหว่าง deploy** เพราะลบ facility records และไฟล์รูป — ใช้ dump/restore สำหรับ production
 
 ## งานที่จะทำต่อ
-1. **ตัดสินใจเรื่อง scripts:** copy `list-users.ts` + `reset-password.ts` เข้า clean repo แล้ว commit หรือไม่
+1. ~~ตัดสินใจเรื่อง scripts~~ **เสร็จแล้ว (2026-09-28):** `list-users.ts` + `reset-password.ts` เข้า repo พร้อม `user:list`/`user:reset` (harden stdin) — ข้อถัดไปคือข้อ 2
 2. Provision Oracle Always Free ARM64 VM: เลือก home region ใกล้ไทยที่มี A1 capacity, Ubuntu + SSH key + persistent volume, firewall เปิดเฉพาะ 22/80/443, ติดตั้ง Node 22.12 / MariaDB / Caddy / systemd
 3. บน VM: `npm ci` → `npx prisma generate` → `npm run lint` → `npm test` → `npx tsc --noEmit` → `npm run build` → **`npm run db:verify-fresh`** (ต้องผ่านบน Linux case-sensitive)
 4. เตรียม production data: เปลี่ยนรหัสผ่านทั้ง 3 บัญชี dev, ล้าง `test-admin*` accounts, ตรวจ `CodeSequence`, `mysqldump` แบบ transaction, copy private storage ไป `/srv/cls-data`, สร้าง `BETTER_AUTH_SECRET` ใหม่

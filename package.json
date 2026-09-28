@@ -13,6 +13,8 @@
     "db:push": "prisma db push",
     "db:verify-fresh": "tsx scripts/verify-fresh-migrations.ts",
     "storage:migrate": "tsx scripts/migrate-private-storage.ts --apply",
+    "user:list": "tsx scripts/list-users.ts",
+    "user:reset": "tsx scripts/reset-password.ts",
     "lint": "eslint",
     "test": "vitest run"
   },

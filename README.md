@@ -68,6 +68,28 @@ npm run dev
 | `npm test` | รัน unit/smoke test ด้วย Vitest |
 | `npm run db:deploy` | ใช้ migrations กับฐานข้อมูล (production) |
 | `npm run db:push` | sync schema โดยตรง `prisma db push` (dev) |
+| `npm run user:list` | ดูรายชื่อผู้ใช้ + role (ไม่แสดงรหัสผ่าน) |
+| `npm run user:reset -- <email>` | รีเซ็ตรหัสผ่านจาก DB โดยตรง (ดูหมายเหตุด้านล่าง) |
+
+## กู้คืนการเข้าสู่ระบบ (ops)
+
+`user:reset` เขียน password hash ลง `Account` โดยตรง ใช้เมื่อล็อกอินไม่ได้และไม่มี ADMIN session เหลือ (เช่น ลืมรหัสผ่าน admin ทั้งหมด) สคริปต์จะ revoke session เดิมของผู้ใช้นั้นทั้งหมด
+
+รันบนเครื่องที่มี `.env` และเข้าถึงฐานข้อมูลได้เท่านั้น — ผู้ที่รันได้เท่ากับ bypass หน้า `/admin` ทั้งหมด และไม่มี audit trail จาก UI
+
+```bash
+# วิธีที่ปลอดภัยกว่า: pipe รหัสผ่านเข้า stdin (ไม่ตกใน shell history)
+printf '%s' "$NEW_PW" | npm run user:reset -- admin@example.com
+
+# หรืออ่านจากไฟล์ที่เขียนแล้วลบทันที
+Get-Content -Raw pw.txt | npm run user:reset -- admin@example.com   # PowerShell
+cat pw.txt | npm run user:reset -- admin@example.com && shred -u pw.txt   # Linux
+
+# สำหรับ automation เท่านั้น (ระวัง secret ตกใน shell history และ CI log)
+NEW_PASSWORD='...' npm run user:reset -- admin@example.com
+```
+
+หมายเหตุ: รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร, ไม่รับรหัสผ่านผ่าน argv, และไม่ log รหัสผ่านหรือ hash ออกทาง stdout
 
 ## Role / สิทธิ์
 
@@ -110,4 +132,5 @@ Dockerfile เป็น fallback ที่ยังไม่ได้รับ�
 
 - เปลี่ยน `BETTER_AUTH_SECRET` เป็นค่าสุ่มยาว (เช่น `openssl rand -base64 32`) ก่อนขึ้น production
 - ไม่ commit `.env`, secrets หรือ credential จริงลง git
+- `npm run user:reset` เป็นเครื่องมือระดับ ops ที่เขียนรหัสผ่านลง DB ได้โดยไม่มี session — จำกัดสิทธิ์ผู้ใช้ที่รัน shell และล้างไฟล์/ตัวแปรรหัสผ่านหลังใช้เสร็จ
 - Production ควรใช้ HTTPS และตั้ง `BETTER_AUTH_URL` ให้ตรงกับโดเมนจริง
