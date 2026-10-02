@@ -15,6 +15,8 @@
 #        VM_PUBLIC_KEY   = path to a PUBLIC ssh key (see cls_oci_ed25519.pub)
 #   3. Optional overrides:
 #        OCI_PROFILE     (default DEFAULT)
+#        IMAGE_OS        (default "Canonical Ubuntu")
+#        IMAGE_OS_VERSION (default 24.04)
 #        VM_NAME         (default cls-facility-ubuntu)
 #        VM_SHAPE        (default VM.Standard.A1.Flex)
 #        VM_OCPUS        (default 4, the Always Free per-account cap)
@@ -61,6 +63,8 @@ VM_BOOT_GB="${VM_BOOT_GB:-100}"
 VM_ADMIN_USER="${VM_ADMIN_USER:-ubuntu}"
 VM_CIDR_VCN="${VM_CIDR_VCN:-10.0.0.0/16}"
 VM_CIDR_SUB="${VM_CIDR_SUB:-10.0.0.0/24}"
+IMAGE_OS="${IMAGE_OS:-Canonical Ubuntu}"
+IMAGE_OS_VERSION="${IMAGE_OS_VERSION:-24.04}"
 SUB_DNS_LABEL="${SUB_DNS_LABEL:-cls}"
 VCN_DNS_LABEL="${VCN_DNS_LABEL:-cls}"
 ROUTE_NAME_SUFFIX="${ROUTE_NAME_SUFFIX:-cls}"
@@ -108,8 +112,10 @@ SUBNET=$(oci_ network subnet create \
 echo "   subnet=$SUBNET"
 
 echo ">> security list (22/80/443 in, all out)"
-INGRESS='[{"cidrBlock":"0.0.0.0/0","protocol":"6","tcpOptions":{"destinationPortRange":{"max":22,"min":22}}},{"cidrBlock":"0.0.0.0/0","protocol":"6","tcpOptions":{"destinationPortRange":{"max":80,"min":80}}},{"cidrBlock":"0.0.0.0/0","protocol":"6","tcpOptions":{"destinationPortRange":{"max":443,"min":443}}}]'
-EGRESS='[{"cidrBlock":"0.0.0.0/0","protocol":"all"}]'
+# Rule bodies require "source"/"destination" wrappers. A bare "cidrBlock" is
+# rejected with InvalidParameter (HTTP 400).
+INGRESS='[{"source":"0.0.0.0/0","protocol":"6","tcpOptions":{"destinationPortRange":{"max":22,"min":22}}},{"source":"0.0.0.0/0","protocol":"6","tcpOptions":{"destinationPortRange":{"max":80,"min":80}}},{"source":"0.0.0.0/0","protocol":"6","tcpOptions":{"destinationPortRange":{"max":443,"min":443}}}]'
+EGRESS='[{"destination":"0.0.0.0/0","protocol":"all"}]'
 if [ "${DRY_RUN:-0}" != "1" ]; then
   oci network security-list create \
     --compartment-id "$OCI_COMPARTMENT" \
@@ -122,36 +128,43 @@ else
   echo "oci network security-list create --compartment-id $OCI_COMPARTMENT --vcn-id $VCN --ingress-security-rules ... --egress-security-rules ... --display-name $VM_NAME-security"
 fi
 
-echo ">> Ubuntu arm64 image (marketplace lookalike listing)"
-# Marketplace Ubuntu images appear in this listing only after subscribing to
-# the image in the console. If empty, subscribe to "Canonical Ubuntu 24.04"
-# (A1/arm64) at: Console -> Marketplace -> then re-run.
+echo ">> Ubuntu arm64 image"
+# Two traps this replaces:
+#   1. `--operating-system Ubuntu` returns nothing — the CLI matches the exact
+#      string, which is "Canonical Ubuntu". Pinning only that string would pick
+#      a "-Minimal" build, which omits cloud-init tooling we rely on.
+#   2. The old `sort_by(data,&"time-created")[-1:][0].id` query returns `[]`
+#      on this CLI, so the script silently reported "no image found".
+# Pin the version and sort server-side instead.
 IMAGE=$(oci_ compute image list \
   --compartment-id "$OCI_COMPARTMENT" \
   --shape "$VM_SHAPE" \
-  --operating-system Ubuntu \
-  --sort-by TIMECREATED \
-  --query 'sort_by(data,&"time-created")[-1:][0].id' --raw-output 2>/dev/null \
+  --operating-system "$IMAGE_OS" \
+  --operating-system-version "$IMAGE_OS_VERSION" \
+  --sort-by TIMECREATED --sort-order DESC \
+  --query 'data[0].id' --raw-output 2>/dev/null \
   | tr -d '[]"' || true)
 if [ -z "$IMAGE" ] || [ "$IMAGE" = "null" ]; then
   echo
-  echo "!! No Ubuntu arm64 image found for shape $VM_SHAPE."
-  echo "   In the Console: Marketplace -> All Applications -> 'Canonical Ubuntu 24.04' ->"
-  echo "   select the A1/ARM64 version, subscribe / accept, then re-run this script."
-  echo "   (Oracle Linux arm64 images are also fine for bootstrap-ubuntu.sh, but the"
-  echo "   script targets Ubuntu/Debian apt commands.)"
+  echo "!! No '$IMAGE_OS $IMAGE_OS_VERSION' arm64 image found for shape $VM_SHAPE."
+  echo "   Check available images with:"
+  echo "     oci compute image list --compartment-id \$OCI_COMPARTMENT \\"
+  echo "       --shape $VM_SHAPE --operating-system '$IMAGE_OS'"
+  echo "   If the account has never used a marketplace image, subscribe to"
+  echo "   'Canonical Ubuntu' (A1/ARM64) at Console -> Marketplace first."
   echo "   Continuing without launching the instance; network resources above remain."
   exit 0
 fi
 echo "   image=$IMAGE"
 
 echo ">> instance ${VM_NAME} (${VM_SHAPE} ${VM_OCPUS} OCPU / ${VM_MEMORY_GB} GB)"
-METADATA_FILE="$(mktemp)"
-printf '{"ssh_authorized_keys": "%s"}' "$(<"$VM_PUBLIC_KEY")" > "$METADATA_FILE"
+# `--metadata` takes the JSON value itself; `@file` is not supported by the
+# compute CLI, so build the document inline instead of writing a temp file.
+VM_SSH_PUBKEY="$(<"$VM_PUBLIC_KEY")"
+METADATA="{\"ssh_authorized_keys\": \"${VM_SSH_PUBKEY}\"}"
 
 if [ "${DRY_RUN:-0}" = "1" ]; then
-  echo "oci compute instance launch --compartment-id $OCI_COMPARTMENT --shape $VM_SHAPE --shape-config-ocpus $VM_OCPUS --shape-config-memory-in-gbs $VM_MEMORY_GB --subnet-id $SUBNET --availability-domain <AD> --image-id $IMAGE --display-name $VM_NAME --assign-public-ip true --metadata @$METADATA_FILE --wait-for-state RUNNING"
-  rm -f "$METADATA_FILE"
+  echo "oci compute instance launch --compartment-id $OCI_COMPARTMENT --shape $VM_SHAPE --shape-config '{\"ocpus\": $VM_OCPUS, \"memoryInGBs\": $VM_MEMORY_GB}' --subnet-id $SUBNET --availability-domain <AD> --image-id $IMAGE --display-name $VM_NAME --assign-public-ip true --metadata '$METADATA' --wait-for-state RUNNING"
   exit 0
 fi
 
@@ -162,17 +175,15 @@ AD=$(oci iam availability-domain list \
 INSTANCE=$(oci compute instance launch \
   --compartment-id "$OCI_COMPARTMENT" \
   --shape "$VM_SHAPE" \
-  --shape-config-ocpus "$VM_OCPUS" \
-  --shape-config-memory-in-gbs "$VM_MEMORY_GB" \
+  --shape-config "{\"ocpus\": $VM_OCPUS, \"memoryInGBs\": $VM_MEMORY_GB}" \
   --subnet-id "$SUBNET" \
   --availability-domain "$AD" \
   --image-id "$IMAGE" \
   --display-name "$VM_NAME" \
   --assign-public-ip true \
-  --metadata "$METADATA_FILE" \
+  --metadata "$METADATA" \
   --wait-for-state RUNNING \
   --query 'data.id' --raw-output)
-rm -f "$METADATA_FILE"
 echo "   instance=$INSTANCE"
 
 echo ">> public IP (may take another minute for the VNIC)"
