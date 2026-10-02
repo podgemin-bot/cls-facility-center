@@ -4,11 +4,12 @@ Thai cable-landing-station (CLS) facility center web app for NT (ปากบา
 
 **Repo ที่ใช้งานจริง: `https://github.com/podgemin-bot/cls-facility-center` (Private, clean history)**
 
-> **สำคัญ:** repo นี้แยกจาก working directory บนเครื่อง
-> - Clean repo (GitHub, push แล้ว): `C:\Users\PC\AppData\Local\Temp\opencode\cls-facility-center-clean`
-> - Working copy ที่ใช้ dev อยู่: `E:\AI\Project\Opencode\CLS data collection\nextjs-ai-nt-2-main`
-> - Working copy ยังเป็น git repo ของโปรเจกต์เก่า (`origin` = `podgemin-bot/cls-database`, Private) และ **ยังมีงาน uncommitted ทั้งหมดอยู่** — ใช้เป็น local dev เท่านั้น อย่า push กลับไปที่ `cls-database`
-> - เวลาจะ commit ของใหม่ ให้ทำใน **clean repo**
+> **สำคัญ (เปลี่ยน 2026-10-02):** working directory กลายเป็น git repo ของตัวเองแล้ว
+> - **Dev + commit ที่ `E:\AI\Project\Opencode\CLS data collection\nextjs-ai-nt-2-main`** — มี `.git` ของตัวเอง (`git init` ใหม่) ที่ `origin` = `podgemin-bot/cls-facility-center` (repo จริง) และ HEAD เริ่มจาก `origin/main` → **`git status` / `git commit` / `git push` ทำที่นี่ได้ตามปกติ**
+> - โฟลเดอร์แอปถูก **untrack ออกจาก legacy repo** (`git rm -r --cached`) และเพิ่มใน `.git/info/exclude` ของ repo แม่ → `git status` ที่ `E:\AI\Project\Opencode\CLS data collection` เหลือแต่รายการ deleted ที่ยังไม่ commit (268 ไฟล์) ซึ่ง**ตั้งใจไม่ commit/push** ไปที่ `cls-database`
+> - `C:\Users\PC\AppData\Local\Temp\opencode\cls-facility-center-clean` เหลือเป็น **mirror/backup เท่านั้น** (commit `cc0f131` ที่เคย commit ที่นั่นถูกยกเลิกแล้ว เพราะไฟล์เดียวกัน commit ที่ working copy แทน) — **อย่า commit ที่นั่นอีก**
+> - ประวัติของสองฝั่ง**ไม่ใช่ตัวเดียวกัน**: legacy repo มี 5 commit ที่ยังไม่เคย push (`dab0268`..`bbf5413` — mobile card layout, uat script, handoff) ผูกกับประวัติที่รั่ว → **ห้าม push ประวัตินั้นไปที่ repo ใหม่** เนื้อหาของ commit เหล่านั้นอยู่ในไฟล์ working copy อยู่แล้ว (snapshot ใหม่ครอบคลุม)
+> - `.env`, `.data/`, logs, `.dev-server.pid` ถูก `.gitignore` กรอง (ยืนยันด้วย `git check-ignore` แล้ว)
 
 ## ที่มาของ repo นี้
 - เดิมเป็น `podgemin-bot/cls-database` ซึ่งเคยเป็น Public และมีข้อมูลจริงใน history (Excel, `public/storage` 144 ไฟล์ ~45 MiB)
@@ -48,7 +49,9 @@ npm.cmd run user:reset -- <email>  # รีเซ็ตรหัสผ่าน�
 - `.gitignore` ครอบ `.env*`, `.data/`, `dev.log`, `dev.err.log`, `prod.*.log`, `deploy.*.log`, `.dev-server.pid`, `node_modules`, `.next`, `out`, `build`, `coverage` แล้ว
 
 ## Dev server (สถานะล่าสุด)
+- **2026-10-02: สตาร์ตใหม่แล้ว** (`npm.cmd run dev`, PID 10848, `.dev-server.pid` อัปเดตแล้ว) — ยืนยันแล้วว่า `/login` → 200 และ `/` → 307 (redirect ไป login ตามที่คาด)
 - รันอยู่ที่ **http://localhost:3000** (Next.js 16.3.6, Turbopack) — PID บันทึกที่ `.dev-server.pid`
+- **2026-09-30: สตาร์ตใหม่แล้ว** (npm.cmd run dev, PID 15944, Ready 2.3s, ไม่มี error ใน `dev.err.log`) — ยืนยันแล้วว่า `/login` → 200 และ `/` → 307 (redirect ไป login ตามที่คาด)
 - Network: `http://192.168.1.48:3000`
 - Log: `dev.log` / `dev.err.log` ที่ app root
 - เริ่มใหม่: `npm.cmd run dev` (ถ้าพอร์ต 3000 ยังถูกจอง ให้ kill process ที่ค้างก่อน แล้วลบ `.dev-server.pid`)
@@ -56,11 +59,13 @@ npm.cmd run user:reset -- <email>  # รีเซ็ตรหัสผ่าน�
 ### บัญชีทดสอบบน dev DB
 | Email | Password | Role |
 |---|---|---|
-| `admin@cls.local` | ดูไฟล์รหัสผ่าน (ด้านล่าง) | ADMIN |
-| `editor@cls.local` | ดูไฟล์รหัสผ่าน (ด้านล่าง) | EDITOR |
-| `viewer@cls.local` | ดูไฟล์รหัสผ่าน (ด้านล่าง) | VIEWER |
+| `admin@cls.local` | `AdminPass123!` | ADMIN |
+| `editor@cls.local` | `EditorPass123!` | EDITOR |
+| `viewer@cls.local` | `ViewerPass123!` | VIEWER |
 
-- **2026-09-28: เปลี่ยนรหัสผ่านทั้ง 3 บัญชีแล้ว** เป็นค่าสุ่มยาว 24 ตัว (ไม่ใช่ `Name+Pass123!` แบบเดิม) เก็บเป็น plaintext ที่ `C:\Users\PC\AppData\Local\Temp\opencode\cls-prod-passwords.txt` — **อยู่นอก repo, ลบทันทีหลังย้ายเข้า password manager** และอย่า commit ไฟล์นี้เด็ดขาด
+- **2026-10-02: รีเซ็ตรหัสผ่านทั้ง 3 บัญชีกลับเป็นชุดอ่านง่าย** (`AdminPass123!` / `EditorPass123!` / `ViewerPass123!`) ด้วย `npm run user:reset -- <email>` (ส่งรหัสผ่านผ่าน stdin) เพราะผู้ใช้จำชุดสุ่มยาว 24 ตัวไม่ได้ — ทดสอบ login ได้ 200 ทั้ง 3 บัญชี และ session เดิมถูก revoke ทั้งหมด
+  - **ชุดนี้อ่อน — ต้องเปลี่ยนกลับเป็นค่าสุ่มยาวบน VM ก่อน go-live** (ไฟล์ค่าสุ่มเดิมยังอยู่ที่ `C:\Users\PC\AppData\Local\Temp\opencode\cls-prod-passwords.txt`)
+- 2026-09-28: เคยเปลี่ยนเป็นค่าสุ่มยาว 24 ตัว (ไม่ใช่ `Name+Pass123!` แบบเดิม) เก็บเป็น plaintext ที่ `C:\Users\PC\AppData\Local\Temp\opencode\cls-prod-passwords.txt` — **อยู่นอก repo, ลบทันทีหลังย้ายเข้า password manager** และอย่า commit ไฟล์นี้เด็ดขาด
 - ตรวจแล้วว่า login ด้วยรหัสใหม่ได้ HTTP 200 ทั้ง 3 บัญชี และรหัสเดิมได้ 401
 - ลบบัญชี test/UAT แล้ว: `test-admin@example.com`, `test-admin2@example.com`, `test-admin3@example.com` (ทั้งหมดไม่มี account/session ค้าง, ADMIN เหลือ 1 คน) ใช้ `npm run user:delete -- <email> --yes`
 - บัญชีที่เหลือบน dev DB มี 3 บัญชี พอดีกับ production
@@ -194,10 +199,39 @@ Tests ระดับ integration ใช้ DB จริง (mock auth ผ่า
 17. **dump ที่ถ่ายบน Windows restore บน Linux ไม่ได้ (table name case):** Windows MariaDB เก็บชื่อตาราง lowercase (`lower_case_table_names=1`) → dump มี `` `roomsecurity` `` แต่ Linux VM ตั้งเป็น `0` และ Prisma ค้นตารางตาม case เดิมจาก schema (`RoomSecurity`...) → restore ตรง ๆ จะได้ DB ที่ app query ไม่ได้; เพิ่ม `scripts/portable-dump.mjs` (`npm run dump:portable`) ที่แก้ case ชื่อตารางเฉพาะใน statement (`CREATE/DROP/LOCK/ALTER/RENAME TABLE`, `INSERT INTO`) ให้ตรงกับ `CREATE TABLE \`...\`` ใน migrations — column identifier ไม่ต้องแก้ (MariaDB ไม่ sensitive อันนั้น); สร้าง artifact สำหรับ production แล้ว: `cls-ubuntu-20260928-140716.sql.gz` (แก้ case แล้ว, ทดสอบ restore ครบ 15 tables/3 users/62 rooms/5 customers/30 assets/7 certs/seq CUST=5) + `cls-data-20260928.tar.gz` (`.data/room-photos` + `floor-plans`, 46.7 MiB) + `SHA256SUMS.txt` — **restore ตัวนี้บน VM ห้ามใช้ `cls-dev-*.sql.gz` ตัวเดิม**
 18. **Gate Linux case-sensitive ใน CI (CI container MariaDB ใช้ `lower_case_table_names=0` ค่าเริ่มต้น):** เพิ่ม 2 steps ลง `ci.yml` — (a) `npm run db:verify-fresh` ชี้ `DATABASE_URL` ไป `root` ของ service container → replay ทุก migration 2 รอบบน DB ทิ้งแล้วตรวจ `lower_case_table_names=0`, `exact_RoomSecurity_tables=1`, `legacy_security_columns=0` (แบบเดียวกับที่เคยกำหนดต้องรอ VM ถึงจะรันได้ — ตอนนี้ CI เป็น Linux ตัวจริงบังคับตรวจ case-sensitive อยู่แล้ว); (b) อินทิเกรชัน portable-dump: เขียน fixture dump ที่ชื่อตาราง lowercase (ส่งเป็น base64 เพื่อไม่ให้มี backtick ใน single quotes), ผ่าน `portable-dump.mjs`, แล้ว assert ว่า `RoomSecurity` อยู่ใน CREATE+INSERT และไม่มี `roomsecurity` หลุด — ทดสอบจริงบน Git Bash ผ่าน (rewrote 2/4 lines) — หมายเหตุ ShellCheck: `# shellcheck disable=SC2016` ใช้ไม่ได้ถ้าเคยมีคำสั่งระหว่าง comment กับบรรทัดที่ต้องการปิด (suppress ครอบแค่ช่วงที่ parser เห็น) จึงเลือกหลีกเลี่ยง backtick เลยแทน
 19. **เตรียม OCI provisioning + เปิดบัญชีไม่ได้ automate:** ติดตั้ง Python 3.12 (winget) + `oci` CLI บนเครื่องไม่สำเร็จ 2 ทาง — pip ถูกบล็อกโดย Windows Long Path (`longPathsEnabled` ต้อง admin ถึงจะเปิด; path มองว่า 241 ตัวสำเร็จ แต่อย่างจริง 370 ตัว → fail `/t\pip-target-*/lib/python/...`), และ MSI (`Oracle.OCI-CLI` ผ่าน winget) ค้าง/msiexec ถูกทิ้ง orphan (Stop-Process บังคับไม่ได้เพราะสิทธิ์) — **บทสรุป: provision จะรันจาก OCI Cloud Shell/bullet Linux ไม่ใช่เครื่องนี้**; สร้าง SSH keys เตรียมแล้ว: `C:\Users\PC\.ssh\cls_oci_ed25519` (admin เข้า VM) + `C:\Users\PC\.ssh\cls_deploy_ed25519` (public ครึ่ง ใช้ทั้ง GitHub deploy key และ VM authorized_keys, private ครึ่ง ใช้เป็น `DEPLOY_SSH_KEY`); เพิ่ม `scripts/provision-oci.sh` — สร้าง VCN/IGW/route/subnet/security-list (22/80/443)/instance A1 (Ubuntu arm64, `metadata.ssh_authorized_keys` จากไฟล์ .pub, `--wait-for-state RUNNING`, พิมพ์ public IP + คำสั่ง ssh ต่อ) รองรับ `DRY_RUN=1`, ครอบด้วย ShellCheck gate (lint-deploy-scripts.mjs ตรวจ `scripts/provision-oci.sh` ด้วยแล้ว — ผ่าน clean); บอกผู้ใช้ตอนขอภาพ Ubuntu ที่ยังไม่ subscribe ใน marketplace
+20. **แก้ OCI auth + provision network (2026-10-01)** — รายละเอียดข้อ 19/21 อยู่ด้านล่างนี้
+    - **สาเหตุ 401:** tenancy OCID ใน `~/.oci/config` เพี้ยนจาก 79 เป็น 77 ตัว (`...ejdzwtnmlfz42fjgzta` แทน `...ejdzwtnmdmlfz42fjgzta`) — fingerprint, key pair, user OCID ถูกต้องมาตลอด ยืนยัน MD5 จาก `oci_api_key.pem` ตรงกับที่ตั้งไว้
+    - **OCID ยาวเท่าไร:** tenancy OCID ที่ถูกต้องยาว **79 ตัว** (`ocid1.tenancy.oc1..` = 20 + unique 59) ตามตัวอย่างในเอกสาร OCI — 60 คือความยาวของ unique ID ไม่ใช่ OCID ทั้งหมด (เคยตีความผิดแล้วเสียเวลาไปหลายรอบ)
+    - **แยก credential OCID ออก:** `ocid1.credential.oc1..` คือ auth token **ไม่ใช่** tenancy — หน้าที่ต้องดูคือ **Console → Identity & Security → Users → API Keys** ไม่ใช่หน้า auth-tokens
+    - **A1 capacity ใน `ap-singapore-1` หมด** — มี AD เดียว (`xmVi:AP-SINGAPORE-1-AD-1`) จึงสลับ AD ไม่ได้ ลอง 11 ครั้งไม่ผ่าน
+22. **Bug 3 จุดใน `scripts/provision-oci.sh` — เดิมจะ fail ทุกครั้ง (แก้แล้ว 2026-10-01):**
+    - **Security rules:** ใช้ `cidrBlock` → API ต้องการ `"source"` (ingress) / `"destination"` (egress) ไม่งั้น 400 `InvalidParameter`
+    - **Shape config:** `--shape-config-ocpus` / `--shape-config-memory-in-gbs` **ไม่มี flag นี้** → ต้องใช้ `--shape-config '{"ocpus": N, "memoryInGBs": M}'`
+    - **Image lookup:** `--operating-system Ubuntu` คืนค่าว่าง (CLI จับคู่ exact string ซึ่งคือ `"Canonical Ubuntu"`) และ query `sort_by(data,&"time-created")[-1:][0].id` คืน `[]` → ต้องใช้ `--operating-system "Canonical Ubuntu" --operating-system-version 24.04 --sort-by TIMECREATED --sort-order DESC --query 'data[0].id'` (pin version กันได้ `-Minimal` build ที่ไม่มี cloud-init tooling)
+    - **~~ยังไม่ได้แก้: `--metadata @file`~~ แก้แล้ว 2026-10-02** — `oci compute instance launch` ไม่รองรับ `@file` จึงเปลี่ยนเป็นสร้าง JSON inline (`METADATA="{\"ssh_authorized_keys\": \"$(<"$VM_PUBLIC_KEY")\"}"`) และลบ temp file ออก ผ่าน `npm run lint:deploy` (bash -n) แล้ว ยังไม่เคยรัน launch จริงเพราะ A1 capacity ไม่ว่าง
+    - **หมายเหตุ PowerShell:** jmespath ที่มี key พิเศษ (`-`) ต้อง escape และ quoting ต่างกันระหว่าง PowerShell กับ bash — **ทดสอบ query ผ่าน Git Bash เสมอ** อย่าสรุปจาก PowerShell
+    - **เส้นทาง path มี space:** `cd "/e/AI/Project/Opencode/CLS data collection/..."` ใน `bash -c` ที่ผ่าน PowerShell จะถูกตัดที่ space → เขียนเป็นไฟล์ `.sh` แยกแล้วเรียกเป็น argument แทน
+23. **OCI CLI ติดตั้งและใช้งานได้แล้ว (2026-09-30)** — ข้อ 19 เดิมสรุปว่าทำไม่ได้ แต่ปัญหา Long Path มาจาก `pip --target` ลง `%TEMP%` (path ~370 ตัวอักษร) แก้ได้ด้วย venv ที่ path สั้น:
+    - `python -m venv C:\ocivenv` → `pip install oci` (ได้ SDK) **และ `pip install oci-cli` แยกอีกตัว** — `pip install oci` รุ่นปัจจุบัน (2.187.1) ไม่มีโค้ด CLI/entry point เลย (ตรวจจาก `RECORD` ไม่มี `oci/cli`) เป็นการแยก package ตั้งแต่รุ่นล่าสุด
+    - ได้ **oci CLI 3.94.1** ที่ `C:\ocivenv\Scripts\oci.exe` + เพิ่ม `C:\ocivenv\Scripts` ลง user PATH แล้ว (shell ใหม่ถึงเรียก `oci` ได้ตรง ๆ) — **บทสรุปเดิมว่า "provision ต้องรันจาก Cloud Shell เท่านั้น" ยกเลิกแล้ว**
+    - เครื่องนี้ไม่มี `openssl` → สร้าง API signing key pair ด้วย `cryptography` ใน venv เดียวกัน (RSA 2048, PKCS#8 PEM, ไม่มี passphrase) ได้ `C:\Users\PC\.ssh\oci_api_key.pem` + `oci_api_key_public.pem` (ต่อท้ายไฟล์ด้วย terminator `OCI_API_KEY` เพื่อกด warning เรื่อง key labeling)
+    - เขียน `C:\Users\PC\.oci\config` (profile DEFAULT, region `ap-singapore-1`) แล้ว — ตอนแรก **authenticate ไม่ผ่าน: `NotAuthenticated` 401** ทุก endpoint และ 401 เหมือนกันทั้ง profile ที่มีและไม่มี `auth_token` → **ตัดปัญหาเรื่อง auth token ออก**; สาเหตุจริงคือ tenancy OCID เพี้ยน (แก้แล้ว ดูข้อ 20)
+    - `--debug` ยืนยันว่า request ถูก sign ด้วย rsa-sha256 และ `keyId` ประกอบถูกรูปแบบ (`<tenancy>/<user>/<fingerprint>`) → CLI ทำงานถูก ปัญหาอยู่ที่ค่า tenancy ไม่ใช่การ signing
+24. **ปรับหน้า "ระบบวิศวกรรม" tab Cooling (2026-10-02)** — งานจากผู้ใช้ 3 ข้อ ทำใน `src/app/(front)/engineering/engineering-client.tsx` เป็นหลัก:
+    - **แยกคอลัมภ์ `ชุดพร้อมใช้/รวม` เป็น 2 คอลัมภ์** `ชุดพร้อมใช้` (`specs.unitsReady`) กับ `ชุดรวม` (`specs.unitsTotal`) — เดิมแสดงรวมเป็น `x/y` ในช่องเดียว
+    - **ตัดคอลัมภ์ `ประสิทธิภาพ` ออกจากตาราง** (ค่า `specs.efficiencyPct` ยังอยู่ใน DB และยังแสดงในหน้า `/rooms` ตามเดิม)
+    - **เพิ่มคอลัมภ์ `สถานะ`** แบบ badge เหมือน tab Power (ใช้ `ASSET_STATUS_META` ตัวเดียวกัน) และเพิ่มตัวเลือกสถานะในฟอร์ม "แก้ไขอุปกรณ์": `COOLING_STATUS_OPTIONS` เปลี่ยนจาก `["Active", "Check"]` เป็น `["Active", "แจ้งเตือน"]` (เพิ่ม label `แจ้งเตือน — ต้องตรวจสอบ` ใน `STATUS_OPTION_LABEL`; ค่าเดิมที่ไม่อยู่ในลิสต์ยังโผล่เป็น option แรกไว้ไม่ให้หาย) — ช่อง status ของฟอร์มแชร์กับ Power อยู่แล้ว จึงแก้แค่รายการตัวเลือก
+    - **ตัดช่องกรอก `ชุดเสีย` (`unitsDown`) และ `ประสิทธิภาพ (%)` (`efficiencyPct`) ออกจากฟอร์ม** — **สำคัญ:** สอง field นี้ยังถูกส่งกลับเข้า `AssetInput` ตอนบันทึก ถ้าปล่อยเป็น `useState("")` จะ `toNum("")` → `null` และ **ลบข้อมูลเดิมใน DB ทิ้งทุกครั้งที่กดบันทึก** → เปลี่ยนเป็นค่าคงที่ที่ derive จาก `editing` asset แทน (`unitsDown`/`efficiencyPct` เป็น `const` ไม่ใช่ state) ข้อมูลเดิมจึงถูกส่งกลับเท่าเดิม
+    - **Schema ไม่เปลี่ยน** — `efficiencyPct`/`unitsDown` ยังอยู่ใน `SerializedCoolingAsset` และ `specs` JSON เพราะยังถูกใช้ที่ `/rooms`; เพิ่ม `status: string | null` ใน `SerializedCoolingAsset` (`src/lib/cls.ts`) และ serialize `a.status` ใน `engineering/page.tsx` (column `status` มีอยู่ใน `Asset` อยู่แล้ว `buildAssetData` ก็เขียน `status` สำหรับทั้งสอง category)
+    - **ตรวจแล้ว:** `tsc --noEmit` ผ่าน · ESLint 0 error · `vitest` 31 files / 289 tests ผ่าน (ต้องเพิ่ม `status` ใน fixture `COOLING` ของ `engineering-client.test.tsx` ไม่งั้น typecheck fail); หลังรันเทสต์รีเซ็ต `CodeSequence CUST` → 5 และล้าง `session` ทิ้งแล้ว
 
 ## งานค้าง / ความเสี่ยงที่เหลือ
 - **ยังไม่ได้ทดสอบบน Linux ARM64 จริง** — `db:verify-fresh` บังคับตรวจ exact-case (`lower_case_table_names=0`) ได้แล้วใน CI (container MariaDB `mariadb:11.4` บน Linux ใช้ค่า 0 เป็นค่าเริ่มต้น step `Verify fresh migrations on Linux (exact case)` + `npm test` รันกับ case-sensitive DB อยู่แล้ว) แต่ยังไม่มีตัว ARM64 จริง; สคริปต์ใน `deploy/` ผ่าน `bash -n` + **ShellCheck 0 findings** (รันอัตโนมัติใน CI แล้ว) แต่ยังไม่ได้รันจริง — คาดว่าจะเหลือแค่ path/OS-specific exceptions ตอนรันจริง
-- **ยังไม่ได้ provision Oracle VM** — ต้องเปิดบัญชี OCI, สร้าง A1 shape, แล้วรัน `deploy/bootstrap-ubuntu.sh`; ต้องทำ dynamic group + policy สำหรับ instance principal (Object Storage) ก่อน backup จะอัปโหลด OCI ได้
+- **ยังไม่ได้ provision Oracle VM (auth แก้แล้ว แต่ A1 capacity หมด)** — OCI CLI authenticate ผ่านแล้ว (2026-10-01) และ network (VCN/IGW/route/subnet/security list) สร้างครบใน `ap-singapore-1` แล้ว เหลือแค่ **launch instance** ที่ไม่สำเร็จเพราะ `Out of host capacity` — ลอง 11 ครั้ง (4/24 GB และ 1/6 GB) ไม่ผ่าน มี AD เดียวจึงสลับ AD ไม่ได้ → ต้องรอ capacity ว่างแล้วรัน `scripts/provision-oci.sh` ซ้ำ (network มีอยู่แล้ว ไม่ต้องลบ) แล้วค่อย `deploy/bootstrap-ubuntu.sh`; ต้องทำ dynamic group + policy สำหรับ instance principal (Object Storage) ก่อน backup จะอัปโหลด OCI ได้
+- **~~ยังไม่ได้ subscribe Ubuntu arm64 ใน Marketplace~~ ไม่จำเป็นแล้ว** — `Canonical-Ubuntu-24.04-aarch64-2026.09.18-0` มีอยู่ในบัญชีแล้ว (verified AVAILABLE / NATIVE) ไม่ต้องไป subscribe ที่ Marketplace
+- **OCI auth token ถูกส่งผ่านแชทและเก็บ plaintext ใน `C:\Users\PC\.oci\config`** — ควรหมุน (revoke token เดิม + สร้างใหม่) หลัง go-live และอย่า commit ไฟล์นี้เด็ดขาด
+- **A1 capacity เป็น regional และมักหมด** — ยืนยันแล้วว่าหมดจริงใน `ap-singapore-1` ณ2026-10-01 (ลดขนาดเหลือ 1 OCPU/6 GB ก็ยังไม่ผ่าน) → ทางเลือกคือรอแล้วลองใหม่ หรือเปิดบัญชีที่ region อื่น (Always Free ไม่ครอบคลุมทุก region)
+- ~~**`scripts/provision-oci.sh` ยังไม่ได้ commit**~~ **แก้ครบ 4 จุดและ commit แล้ว 2026-10-02** (security rules `source`/`destination` · shape-config JSON · image lookup `Canonical Ubuntu` + pin เวอร์ชัน · `--metadata` inline)
 - **ยังไม่ได้ใส่ GitHub secrets** (`DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`) — `deploy.yml` จะ fail จนกว่าจะตั้ง และ `DEPLOY_USER` ต้องมี passwordless sudo; `DEPLOY_SSH_KEY` ต้องเป็น **private key แบบ OpenSSH** (ไม่ใช่ `.pub`) เพราะ workflow เอาไปเขียน `~/.ssh/deploy_key` แล้วตรวจด้วย `ssh-keygen -y`
 - **`scripts/verify-fresh-migrations.ts` ใช้ `mariadb` โดยตรง** — เพิ่มเป็น devDependency แล้ว (`mariadb@^3.4.5`) ไม่ต้องพึ่งการ hoist ของ `@prisma/adapter-mariadb` อีกต่อไป ถ้า adapter เปลี่ยน major ก็ไม่กระทบสคริปต์นี้
 - **`npm audit` เหลือ 7 รายการ (1 moderate, 6 high) — ตัดสินใจแล้ว 2026-09-28 ยอมรับ พร้อมเหตุผล:**
@@ -205,7 +239,7 @@ Tests ระดับ integration ใช้ DB จริง (mock auth ผ่า
     - `mysql2` 3.15.3 (ผ่าน prisma CLI) — fix มีใน 3.24.4 แต่ต้องใส่ `overrides` ให้ transitive dep ของ Prisma ซึ่งเสี่ยงเปลี่ยนพฤติกรรมของ `migrate diff`/shadow DB; ยังไม่ทำ ถ้าจะทำให้ทดสอบ `db:verify-fresh` + เทสต์หลัง override
     - `mariadb` 3.4.5 — **ไม่มี fix** และเป็นเวอร์ชันเดียวกับที่ `@prisma/adapter-mariadb` ใช้อยู่แล้ว (การประกาศเป็น devDependency ไม่ได้เพิ่มความเสี่ยงใหม่); advisory ที่เกี่ยวข้องคือ cleartext password ต่อ MitM — ลดความเสี่ยงได้เพราะ MariaDB bind แค่ `127.0.0.1`; อีกอันเป็น SQL injection เฉพาะ charset big5/gbk/sjis/cp932/gb18030 ซึ่งเราใช้ utf8mb4
     - `xlsx` — **ไม่มี fix**; ย้ายจาก `dependencies` เป็น `devDependencies` แล้วเพราะมีแต่ `scripts/import.ts` กับ `scripts/export-database.ts` ใช้ ไม่มีส่วนไหนใน `src/` import; ถ้าอยากตัด advisory ให้ได้จริงต้องลบสคริปต์ทั้งสองทิ้ง (เป็นเครื่องมือ seed/ส่งออกข้อมูล) — ยังไม่ทำเพราะเป็นงานประวัติของโปรเจกต์
-- **Working copy ยังมีงาน uncommitted ทั้งหมด** และยังชี้ `origin` ไปที่ `cls-database` — ต้องระวังไม่ push ผิกที่ (เนื้อหา tracked ของ working copy ตรงกับ clean repo ทุกไฟล์ ยกเว้นไฟล์ที่ gitignore เช่น `.env`, `.data/`, logs)
+- **เดิม: Working copy เป็น repo ของ `cls-database` — แก้แล้ว 2026-10-02** ตอนนี้โฟลเดอร์แอปมี `.git` ของตัวเอง ผูกกับ `cls-facility-center` อยู่ (ดูบล็อกต้นไฟล์) จึง commit/push ได้ตรงที่นี่ โดยไม่ต้องแตะ legacy repo; รายการ deleted 268 ไฟล์ที่ค้างใน index ของ repo แม่เป็นผลจาก `git rm -r --cached` และ**ไม่ต้อง commit** ไปที่ `cls-database`
 - **`reset-password.ts` เป็น ops tool ที่เขียนรหัสผ่านลง DB ได้โดยไม่มี session** — คนที่รันได้เท่ากับ bypass หน้า `/admin` ทั้งหมด จำกัดสิทธิ์ผู้ใช้ที่รัน shell บน VM, อย่าใส่รหัสผ่านใน argv, ล้างไฟล์/ตัวแปรรหัสผ่านหลังใช้ (รองรับ stdin แล้ว)
 - **Production data เตรียมแล้ว (2026-09-28)** ยกเว้น 2 อย่างที่ต้องทำบน VM: เปลี่ยนรหัสผ่านทั้ง 3 บัญชี (สุ่มใหม่ 24 ตัว, ทดสอบ login 200/401 ผ่าน), ลบ `test-admin*` ทั้ง 3 บัญชี, รีเซ็ต `CodeSequence CUST` จาก 172 → 5, `mariadb-dump --single-transaction` + ทดสอบ restore เข้า scratch DB สำเร็จ — **dump ที่จะใช้บน VM คือ `cls-ubuntu-20260928-140716.sql.gz`** (ผ่าน `portable-dump` แล้ว — Windows dump มีชื่อตาราง lowercase ซึ่ง restore บน Linux `lower_case_table_names=0` ไม่ได้) — ที่เหลือคือ copy `.data/` (tar: `cls-data-20260928.tar.gz`) ไป `/srv/cls-data` และ `BETTER_AUTH_SECRET` ใหม่ซึ่ง `bootstrap-ubuntu.sh` สร้างให้เองบน VM
 - **ยังไม่ได้ provision Oracle VM** และยังไม่มี GitHub Actions workflow
@@ -227,10 +261,27 @@ Tests ระดับ integration ใช้ DB จริง (mock auth ผ่า
 - **`/etc/cls-facility/env` ต้องครอบทุกค่าด้วย `"`** เพราะ `DATABASE_URL` มี `&` — bash จะอ่านเป็น background operator (ทั้ง `set -a; . env; set +a` และ systemd `EnvironmentFile` ต้องการ quotes); `release.sh` มี guard `grep -nE '^[A-Za-z_][A-Za-z0-9_]*=[^"'\'']*&'` แล้วหยุดทันทีถ้าไม่มี quotes
 - **บน VM ห้ามใช้ `npm prune --omit=dev`** — `release.sh` เก็บ devDependencies ไว้เพราะ `tsx` (ops scripts) และ `prisma` CLI อยู่ในนั้น; จัดการพื้นที่ด้วย `--keep N` แทน
 - **Caddy ต้องส่งต่อ public host ใน `X-Forwarded-Host`** — Next.js เทียบ `Origin` กับ `X-Forwarded-Host` ใน Server Actions แล้ว reject เมื่อไม่ตรง ถ้าเปลี่ยน proxy ต้องใส่ `serverActions.allowedOrigins`
+- **`pip install oci` ไม่ได้ CLI** (รุ่น 2.187.1 แยก package แล้ว) — ต้อง `pip install oci-cli` เพิ่ม; ถ้าสังเกตว่า `C:\ocivenv\Scripts\oci.exe` ไม่มี แปลว่ายังไม่ได้ลงตัวหลัง
+- **`specs` ของ Cooling เก็บ field ที่ไม่ได้โชว์ใน UI แล้ว** (`unitsDown`, `efficiencyPct`) — ถ้าจะเพิ่ม/ลบช่องกรอกใน `AssetDialog` ต้องระวังว่าค่าใน `input()` ถูกส่งกลับ DB ทุกครั้งที่บันทึก ค่าที่ไม่มี input ต้อง derive จาก `editing` (เป็น `const`) ไม่ใช่ `useState("")` ไม่งั้นจะถูกเขียนทับเป็น `null`
+- **Windows Long Path กัน `pip install --target` ได้ด้วย venv path สั้น** — `C:\ocivenv` (12 ตัวอักษร) แทน `%TEMP%\pip-target-*` (~80) ต่างกันพอให้รอด ไม่ต้องแตะ `longPathsEnabled` ที่ต้องใช้สิทธิ์ admin
 
 ## งานที่จะทำต่อ
 1. ~~ตัดสินใจเรื่อง scripts~~ **เสร็จแล้ว (2026-09-28):** `list-users.ts` + `reset-password.ts` เข้า repo พร้อม `user:list`/`user:reset` (harden stdin) — ข้อถัดไปคือข้อ 2
-2. Provision Oracle Always Free ARM64 VM: เลือก home region ใกล้ไทยที่มี A1 capacity, Ubuntu + SSH key + persistent volume, firewall เปิดเฉพาะ 22/80/443 แล้วรัน `deploy/bootstrap-ubuntu.sh` (ทำแทนข้อ 3, 5, 6 ที่ยังไม่มี VM) — **ยังต้องเปิดบัญชี OCI เอง**
+2. Provision Oracle Always Free ARM64 VM — **auth แก้แล้ว (2026-10-01), ค้างที่ A1 capacity**:
+   - **✅ OCI auth ผ่าน** — สาเหตุคือ tenancy OCID ใน `C:\Users\PC\.oci\config` เพี้ยน (77 ตัว) แก้เป็น 79 ตัวแล้ว (backup ที่ `config.bak`) ยืนยันด้วย `oci iam region-subscription list` → `ap-singapore-1` READY, is-home-region
+   - **✅ Network สร้างครบ** (ใช้ต่อได้ ไม่ต้องสร้างซ้ำ): VCN `10.0.0.0/16` + IGW + route table + public subnet `10.0.0.0/24` + security list (เปิด 22/80/443) — OCID ทั้งหมดอยู่ใน log ของ session นี้
+   - **❌ Instance ยังไม่ได้ launch** — `Out of host capacity` ทุกครั้ง (ลอง 11 ครั้ง: 4/24 GB 6 ครั้ง, 1/6 GB 5 ครั้ง) สลับกับ `429 TooManyRequests` ไม่มี instance/volume ค้าง
+   - **OCID ของ network ที่สร้างแล้ว** (ใช้ต่อ ไม่ต้องสร้างซ้ำ — แต่ถ้าจำเป็นต้องหา OCID ใหม่ใน console):
+     - VCN `ocid1.vcn.oc1.ap-singapore-1.amaaaaaamm6rcbiasuukk5m3wt37cbcl376xjc7ym3qskksoqvh55ttbigcq`
+     - internet gateway `ocid1.internetgateway.oc1.ap-singapore-1.aaaaaaaaentlwwqyin6aoqspdslw4lviz7v2ujnmlen4tz4ucwmmdbdy26ka`
+     - route table `ocid1.routetable.oc1.ap-singapore-1.aaaaaaaadlkod7crli4nknyyh5okpy7tfzuakoutrxonchp5pcxnyzblqfqq`
+     - public subnet `ocid1.subnet.oc1.ap-singapore-1.aaaaaaaao5q6z5gcvqhfvhr62sm3dsrnveclqehbz5rkoa2zjkj5hxnhqp6q`
+     - security list 2 ตัว (สร้างซ้ำเพราะรอบแรก 400 — **ตัวที่ 2 คือตัวที่ใช้**): `...aaa7fyifp6lur4wxd2vjiean2zj7ceziip7ioea2obbllaocqvhub3q`
+     - image (Ubuntu 24.04 aarch64 ล่าสุด) `ocid1.image.oc1.ap-singapore-1.aaaaaaaaw75ef2chh5goomskvdznqz36cadczqelqvndbqcozc5icyig57za`
+   - **พร้อม launch ทันทีที่ capacity ว่าง** — ถ้ารัน `provision-oci.sh` ทั้งไฟล์ซ้ำจะพยายามสร้าง network ซ้ำและเจอชื่อ dns-label ซ้ำ → ให้รันเฉพาะขั้น instance launch ต่อจาก OCID ข้างบน หรือลบ network เดิมทิ้งก่อนแล้วรันใหม่ทั้งชุด
+   - **แก้แล้ว:** `--metadata` ส่ง JSON inline ไม่ใช้ `@file` (2026-10-02) — ไม่ต้องแก้อะไรเพิ่มก่อนรัน
+   - ดู "Bug ใน provision-oci.sh" (ข้อ 22) ก่อนรัน
+   - **ไม่ต้อง subscribe Marketplace** — `Canonical-Ubuntu-24.04-aarch64-2026.09.18-0` มีอยู่ในบัญชีแล้ว (verified AVAILABLE / NATIVE)
 3. บน VM: `release.sh --full --verify-fresh` (ครอบคลุม `npm ci` → prisma generate → lint → tsc → test → build → **db:verify-fresh** บน Linux case-sensitive) — ต้องผ่านก่อน go-live
 4. ~~เตรียม production data~~ **เสร็จแล้ว (2026-09-28):** เปลี่ยนรหัสผ่าน 3 บัญชี (สุ่มใหม่, login 200/401 ยืนยันแล้ว), ลบ `test-admin*` ทั้ง 3, `CodeSequence CUST` 172 → 5, ล้าง session ที่ test suite ทิ้งไว้, `mariadb-dump --single-transaction` + พิสูจน์ว่า restore เข้า scratch DB ได้ — **restore บน VM ต้องใช้ `cls-ubuntu-20260928-140716.sql.gz` (ผ่าน `portable-dump`, case ชื่อตารางถูกสำหรับ Linux) ที่ `C:\Users\PC\AppData\Local\Temp\opencode\cls-data-prep\` พร้อมกับ `cls-data-20260928.tar.gz` (`/srv/cls-data`) + `SHA256SUMS.txt`** — **เหลือทำบน VM:** copy `.data/` ไป `/srv/cls-data`, load dump ผ่าน `restore.sh --file`, และยืนยันว่า `BETTER_AUTH_SECRET` ใหม่ถูกสร้าง
 5. ~~Deploy แบบ release directory~~ **เตรียมไว้แล้ว:** `deploy/release.sh` (build → dump → migrate → สลับ symlink → health-check → rollback) — ต้องรันจริงบน VM อย่างน้อย 1 ครั้ง
@@ -239,3 +290,5 @@ Tests ระดับ integration ใช้ DB จริง (mock auth ผ่า
 8. Backup/monitoring: `cls-backup.timer` + `backup.sh` (OCI instance principal, 7 daily / 4 weekly) เตรียมไว้แล้ว — ต้องสร้าง bucket + dynamic group/policy และพิสูจน์ด้วย `restore.sh --latest --verify-only` ก่อน go-live
 9. ~~Production UAT ก่อน go-live~~ **มีตัวรันอัตโนมัติแล้ว (2026-09-28):** `scripts/production-uat.ts` + `npm run uat:production` ตรวจผ่าน HTTP อย่างเดียว ไม่ต่อ DB — 21 check (TLS/security headers, `__Secure-` cookie, signup ปิด, redirect ของ unauthenticated + forged cookie, ไม่มีรูปหลุดทั้ง private route และ path เก่าใน `public/`, login 3 role, RBAC `/admin` + ไม่ให้ email หลุด, origin guard ของ Server Actions) — รันกับ dev แล้วผ่านหมด; บังคับให้เป็น https และ read-only เป็นค่าเริ่มต้น (`UAT_ALLOW_HTTP=1` / `UAT_ALLOW_WRITES=1` สำหรับ dry run); **ที่ยังต้องทำเอง:** CRUD ผ่าน browser, reboot persistence, ตรวจ layout มือถือ/เดสก์ท็อป, และ `db:verify-fresh` บน ARM64 จริง
     - เหตุผลที่ต้องมีตัวใหม่: `scripts/*-e2e-smoke.ts` เดิม import `prisma`/`auth` → รันได้แค่บนเครื่องที่มี DB credentials ใช้ตรวจ host จริงไม่ได้ และ hardcode `localhost:3000`
+10. **เปลี่ยนรหัสผ่าน 3 บัญชีบน VM อีกครั้งก่อน go-live** — dev DB ถูกรีเซ็ตกลับเป็นชุดอ่านง่าย (`AdminPass123!` / `EditorPass123!` / `ViewerPass123!`, 2026-10-02) เพื่อให้ผู้ใช้เข้า dev ได้ ชุดนี้ห้ามหลุดขึ้น VM — ใช้ `npm run user:reset -- <email>` (stdin) แล้วล้าง session ทิ้ง
+11. ~~Commit งานลง clean repo~~ **เสร็จแล้ว 2026-10-02:** working directory ตั้งเป็น repo ของ `cls-facility-center` เองแล้ว (ดูบล็อกต้นไฟล์) → เหลือแค่ `git push` จากโฟลเดอร์แอปตอนที่พร้อม และล้าง commit `cc0f131` ที่ค้างในโฟลเดอร์ mirror ทิ้ง (เนื้อหาเดียวกันอยู่ที่ working copy แล้ว)
