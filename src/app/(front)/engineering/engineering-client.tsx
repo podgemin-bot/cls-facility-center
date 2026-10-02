@@ -83,13 +83,14 @@ const STATUS_ORDER: string[] = ["Active", "Standby", "Maintenance", "Check", "�
 
 const POWER_STATUS_OPTIONS = ["Active", "Standby", "Maintenance"];
 
-const COOLING_STATUS_OPTIONS = ["Active", "Check"];
+const COOLING_STATUS_OPTIONS = ["Active", "แจ้งเตือน"];
 
 const STATUS_OPTION_LABEL: Record<string, string> = {
   Active: "Active — ปกติ",
   Standby: "Standby — สำรอง",
   Maintenance: "Maintenance — ซ่อมบำรุง",
   Check: "Check — ตรวจสอบ",
+  "แจ้งเตือน": "แจ้งเตือน — ต้องตรวจสอบ",
 };
 
 const ASSET_STATUS_META: Record<string, { label: string; badge: string; alert?: boolean }> = {
@@ -526,9 +527,10 @@ function CoolingTable({
           <TableHead>ชื่อ</TableHead>
           <TableHead>BTU</TableHead>
           <TableHead className="text-right">BTU รวม</TableHead>
-          <TableHead className="text-center">ชุดพร้อมใช้/รวม</TableHead>
-          <TableHead className="text-center">ประสิทธิภาพ</TableHead>
+          <TableHead className="text-center">ชุดพร้อมใช้</TableHead>
+          <TableHead className="text-center">ชุดรวม</TableHead>
           <TableHead>ห้อง / สถานี</TableHead>
+          <TableHead>สถานะ</TableHead>
           <TableHead>หมายเหตุ</TableHead>
           {canEdit && <TableHead className="w-20" />}
         </TableRow>
@@ -541,44 +543,48 @@ function CoolingTable({
             </TableCell>
           </TableRow>
         )}
-        {rows.map((a) => (
-          <TableRow key={a.id}>
-            <TableCell className="font-mono text-xs font-medium">{a.code}</TableCell>
-            <TableCell data-card-title className="font-medium">
-              {a.name}
-            </TableCell>
-            <TableCell className="text-sm">{coolingBtuDisplay(a)}</TableCell>
-            <TableCell className="text-right tabular-nums">
-              {a.btuTotal?.toLocaleString() ?? "-"}
-            </TableCell>
-            <TableCell className="text-center tabular-nums">
-              {a.unitsReady ?? "-"}/{a.unitsTotal ?? "-"}
-            </TableCell>
-            <TableCell className="text-center">
-              {a.efficiencyPct != null ? (
-                <Badge
-                  variant={a.efficiencyPct < 100 ? "destructive" : "outline"}
-                  className="tabular-nums"
-                >
-                  {a.efficiencyPct}%
-                </Badge>
-              ) : (
-                "-"
-              )}
-            </TableCell>
-            <TableCell className="text-sm text-muted-foreground">
-              {a.roomCode ? `${a.roomCode}` : a.siteCode ?? "-"}
-            </TableCell>
-            <TableCell className="max-w-48 text-xs text-muted-foreground">
-              {a.note ? <span className="line-clamp-2">{a.note}</span> : "-"}
-            </TableCell>
-            <ActionCell
-              canEdit={canEdit}
-              onEdit={() => onEdit(a)}
-              onDelete={() => onDelete(a)}
-            />
-          </TableRow>
-        ))}
+        {rows.map((a) => {
+          const statusMeta = ASSET_STATUS_META[a.status ?? ""];
+          return (
+            <TableRow key={a.id}>
+              <TableCell className="font-mono text-xs font-medium">{a.code}</TableCell>
+              <TableCell data-card-title className="font-medium">
+                {a.name}
+              </TableCell>
+              <TableCell className="text-sm">{coolingBtuDisplay(a)}</TableCell>
+              <TableCell className="text-right tabular-nums">
+                {a.btuTotal?.toLocaleString() ?? "-"}
+              </TableCell>
+              <TableCell className="text-center tabular-nums">
+                {a.unitsReady ?? "-"}
+              </TableCell>
+              <TableCell className="text-center tabular-nums">
+                {a.unitsTotal ?? "-"}
+              </TableCell>
+              <TableCell className="text-sm text-muted-foreground">
+                {a.roomCode ? `${a.roomCode}` : a.siteCode ?? "-"}
+              </TableCell>
+              <TableCell>
+                {statusMeta ? (
+                  <Badge variant="outline" className={statusMeta.badge}>
+                    {statusMeta.alert && <Flame className="size-3" />}
+                    {statusMeta.label}
+                  </Badge>
+                ) : (
+                  <Badge variant="outline">ไม่ระบุ</Badge>
+                )}
+              </TableCell>
+              <TableCell className="max-w-48 text-xs text-muted-foreground">
+                {a.note ? <span className="line-clamp-2">{a.note}</span> : "-"}
+              </TableCell>
+              <ActionCell
+                canEdit={canEdit}
+                onEdit={() => onEdit(a)}
+                onDelete={() => onDelete(a)}
+              />
+            </TableRow>
+          );
+        })}
       </TableBody>
     </Table>
   );
@@ -1049,20 +1055,14 @@ function AssetDialog({
         : ""
       : ""
   );
-  const [unitsDown, setUnitsDown] = useState(
-    editing && "unitsDown" in editing
-      ? editing.unitsDown != null
-        ? String(editing.unitsDown)
-        : ""
-      : ""
-  );
-  const [efficiencyPct, setEfficiencyPct] = useState(
-    editing && "efficiencyPct" in editing
-      ? editing.efficiencyPct != null
-        ? String(editing.efficiencyPct)
-        : ""
-      : ""
-  );
+  const unitsDown =
+    editing && "unitsDown" in editing && editing.unitsDown != null
+      ? String(editing.unitsDown)
+      : "";
+  const efficiencyPct =
+    editing && "efficiencyPct" in editing && editing.efficiencyPct != null
+      ? String(editing.efficiencyPct)
+      : "";
 
   const [siteCode, setSiteCode] = useState(initLoc.site);
   const [buildingId, setBuildingId] = useState(initLoc.building);
@@ -1322,25 +1322,6 @@ function AssetDialog({
                     min={0}
                     value={unitsReady}
                     onChange={(e) => setUnitsReady(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1">
-                  {label("ชุดเสีย")}
-                  <Input
-                    type="number"
-                    min={0}
-                    value={unitsDown}
-                    onChange={(e) => setUnitsDown(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1">
-                  {label("ประสิทธิภาพ (%)")}
-                  <Input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={efficiencyPct}
-                    onChange={(e) => setEfficiencyPct(e.target.value)}
                   />
                 </div>
               </div>

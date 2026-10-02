@@ -129,6 +129,7 @@ export default async function EngineeringPage() {
         name: a.name,
         model: a.model,
         specType: s.type ?? null,
+        status: a.status,
         note: a.note,
         btu: s.btu ?? null,
         btuTotal: s.btuTotal ?? null,

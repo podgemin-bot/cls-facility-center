@@ -178,6 +178,7 @@ export type SerializedCoolingAsset = {
   name: string
   model: string | null
   specType: string | null
+  status: string | null
   note: string | null
   btu: string | null
   btuTotal: number | null
